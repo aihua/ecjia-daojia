@@ -91,7 +91,8 @@ function merchant_cat_list($cat_id = 0, $selected = 0, $re_type = true, $level =
 				->leftJoin('merchants_category as s', RC_DB::raw('c.cat_id'), '=', RC_DB::raw('s.parent_id'))
 				->selectRaw('c.cat_id, c.cat_name, c.parent_id, c.is_show, c.sort_order, COUNT(s.cat_id) AS has_children')
 				->groupBy(RC_DB::raw('c.cat_id'))
-				->orderBy(RC_DB::raw('c.parent_id'), 'asc')->orderBy(RC_DB::raw('c.sort_order'), 'asc')
+				->orderBy(RC_DB::raw('c.parent_id'), 'asc')
+				->orderBy(RC_DB::raw('c.sort_order'), 'asc')
 				->where(RC_DB::raw('c.store_id'), $_SESSION['store_id'])
 				->get();
 				
@@ -104,7 +105,8 @@ function merchant_cat_list($cat_id = 0, $selected = 0, $re_type = true, $level =
 				
 			$res3 = RC_DB::table('goods_cat as gc')
 				->leftJoin('goods as g', RC_DB::raw('g.goods_id'), '=', RC_DB::raw('gc.goods_id'))
-				->where(RC_DB::raw('g.is_delete'), 0)->where(RC_DB::raw('g.is_on_sale'), 1)
+				->where(RC_DB::raw('g.is_delete'), 0)
+				->where(RC_DB::raw('g.is_on_sale'), 1)
 				->groupBy(RC_DB::raw('gc.cat_id'))
 				->get();
 				
@@ -326,7 +328,8 @@ function get_merchants_brandlist() {
 				$logo_url = RC_Uri::admin_url('statics/images/nopic.png');
 				$data[$key]['brandLogo'] = "<img src='" . $logo_url . "' style='width:100px;height:100px;' />";
 			} else {
-				$logo_url = file_exists(RC_Upload::upload_path($val['brandLogo'])) ? $logo_url : RC_Uri::admin_url('statics/images/nopic.png');
+				$disk = RC_Filesystem::disk();
+				$logo_url = $disk->exists(RC_Upload::upload_path($val['brandLogo'])) ? $logo_url : RC_Uri::admin_url('statics/images/nopic.png');
 				$data[$key]['brandLogo'] = "<img src='" . $logo_url . "' style='width:100px;height:100px;' />";
 			}
 		}
@@ -385,16 +388,26 @@ function get_merchant_where_sql($filter) {
  *
  * @access  public
  * @param   integer     $selected   选定的类型编号
+ * @param   boolean     $enabled    是否显示
+ * @param   boolean     $show_all   是否显示平台规格
  * @return  string
  */
-function goods_enable_type_list($selected, $enabled = false) {
-	$db_goods_type = RC_DB::table('goods_type');
+function goods_enable_type_list($selected, $enabled = false, $show_all = false) {
+	$db_goods_type = RC_DB::table('goods_type')->where('store_id', $_SESSION['store_id']);
 
 	if ($enabled) {
 		$db_goods_type->where('enabled', 1);
 	}
-	$data = $db_goods_type->select('cat_id', 'cat_name')->where('store_id', $_SESSION['store_id'])->get();
 
+	if ($show_all) {
+		//自营商家可以使用平台后台添加的商品规格
+		$store_info = RC_DB::table('store_franchisee')->where('store_id', $_SESSION['store_id'])->first();
+		if ($store_info['manage_mode'] == 'self') {
+			$db_goods_type->orWhere('store_id', 0);
+		}
+	}
+	$data = $db_goods_type->select('cat_id', 'cat_name')->get();
+	
 	$opt = '';
 	if (!empty($data)) {
 		foreach ($data as $row){
@@ -407,22 +420,25 @@ function goods_enable_type_list($selected, $enabled = false) {
 }
 
 /**
- * 获取审核状态
+ * 获取审核状态  1未审核 2审核未通过 3审核已通过 5无需审核
  */
 function get_merchant_review_status() {
-	$review_status = 1;
+	$review_status = 1; //默认未审核
+	
+	//商店设置->基本设置中 商家审核关闭 则所有商家商品无需审核
 	if (ecjia::config('review_goods') == 0) {
 		$review_status = 5;
 	} else {
 		if (isset($_SESSION['store_id']) && $_SESSION['store_id'] > 0) {
-			$shop_review_goods = RC_DB::table('merchants_config')->where('store_id', $_SESSION['store_id'])->where('code', 'shop_review_goods')->pluck('value');
-			if ($shop_review_goods == 0) {
+			$manage_mode = RC_DB::table('store_franchisee')->where('store_id', $_SESSION['store_id'])->pluck('manage_mode');
+			if ($manage_mode == 'self') {
 				$review_status = 5;
-			} else {
-			    $review_status = 0;
 			}
-		} else {
-			$review_status = 5;
+			$shop_review_goods = RC_DB::table('merchants_config')->where('store_id', $_SESSION['store_id'])->where('code', 'shop_review_goods')->pluck('value');
+			//单个商店开启了审核商品 则默认为未审核
+			if ($shop_review_goods == 1) {
+				$review_status = 1;
+			}
 		}
 	}
 	return $review_status;

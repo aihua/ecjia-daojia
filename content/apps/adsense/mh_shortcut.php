@@ -77,7 +77,7 @@ class mh_shortcut extends ecjia_merchant {
     	$position = new Ecjia\App\Adsense\Merchant\PositionManage('shortcut', $_SESSION['store_id']);
     	$data = $position->getAllPositions();
     	
-    	if(empty($data)){
+    	if (empty($data)){
     		$data = RC_Loader::load_app_config('merchant_shortcut');
     		$this->assign('cycimage_config', 'cycimage_config');
     	}
@@ -236,7 +236,7 @@ class mh_shortcut extends ecjia_merchant {
     
     	$info = RC_DB::TABLE('merchants_ad_position')->where('position_id', $position_id)->select('ad_width', 'ad_height')->first();
     	$data['ad_width'] = $info['ad_width'];
-    	$data['ad_height'] = $info['ad_height'];;
+    	$data['ad_height'] = $info['ad_height'];
     	$data['enabled'] = 1;
     	$this->assign('data', $data);
     
@@ -268,12 +268,12 @@ class mh_shortcut extends ecjia_merchant {
     			}
     		}
     	}else{
-    		return $this->showmessage('请上传菜单片', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    		return $this->showmessage('请上传菜单图片', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
     	}
     	 
-    	if(empty($_POST['show_client'])){
+    	if (empty($_POST['show_client'])) {
     		return $this->showmessage('请选择投放平台', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-    	}else{
+    	} else {
     		$show_client = Ecjia\App\Adsense\Client::clientSelected($_POST['show_client']);
     	}
     	$data = array(
@@ -342,9 +342,9 @@ class mh_shortcut extends ecjia_merchant {
     		$ad_code = $old_pic;
     	}
     	 
-    	if(empty($_POST['show_client'])){
+    	if (empty($_POST['show_client'])) {
     		return $this->showmessage('请选择投放平台', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-    	}else{
+    	} else {
     		$show_client = Ecjia\App\Adsense\Client::clientSelected($_POST['show_client']);
     	}
     	 

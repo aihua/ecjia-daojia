@@ -49,7 +49,6 @@ defined('IN_ECJIA') or exit('No permission resources.');
 class merchant extends ecjia_merchant {
 	public function __construct() {
 		parent::__construct();
-		$this->db_region = RC_Loader::load_model('region_model');
 
         RC_Script::enqueue_script('jquery-form');
 		RC_Script::enqueue_script('jquery-ui');
@@ -65,6 +64,7 @@ class merchant extends ecjia_merchant {
 		RC_Style::enqueue_style('bar', RC_App::apps_url('statics/css/bar.css', __FILE__), array());
 		RC_Script::enqueue_script('migrate', RC_App::apps_url('statics/js/migrate.js', __FILE__) , array() , false, true);
 		RC_Script::enqueue_script('region',RC_Uri::admin_url('statics/lib/ecjia-js/ecjia.region.js'));
+		RC_Script::enqueue_script('qq_map', 'https://map.qq.com/api/js?v=2.exp');
 		
 		RC_Loader::load_app_func('merchant_franchisee');
 		RC_Loader::load_app_func('global');
@@ -74,6 +74,10 @@ class merchant extends ecjia_merchant {
 	}
 
 	public function init() {
+		if (ecjia::config('merchant_join_close') == 1) {
+			return $this->showmessage('抱歉，该网站已关闭入驻商加盟！', ecjia::MSGTYPE_HTML | ecjia::MSGSTAT_ERROR);
+		}
+		$this->unset_login_info();
 		$step 	= isset($_GET['step']) 		? $_GET['step'] 		: 1;
 		$type	= !empty($_GET['type']) 	? trim($_GET['type']) 	: '';
 		$mobile = !empty($_GET['mobile']) 	? trim($_GET['mobile']) : '';
@@ -151,9 +155,10 @@ class merchant extends ecjia_merchant {
 				$check_log_list = RC_DB::table('store_check_log')->where('store_id', $data['store_id'])->get();
 			}
 			
-			$data['province']				= !empty($data['province'])					? $this->get_region_name($data['province']) : '';
-			$data['city']					= !empty($data['city'])						? $this->get_region_name($data['city'])		: '';
-			$data['district']				= !empty($data['district'])					? $this->get_region_name($data['district'])	: '';
+			$data['province']				= !empty($data['province'])					? ecjia_region::getRegionName($data['province']) 			: '';
+			$data['city']					= !empty($data['city'])						? ecjia_region::getRegionName($data['city'])				: '';
+			$data['district']				= !empty($data['district'])					? ecjia_region::getRegionName($data['district'])			: '';
+			$data['street']					= !empty($data['street'])					? ecjia_region::getRegionName($data['street'])				: '';
 			$data['identity_pic_front']  	= !empty($data['identity_pic_front'])		? RC_Upload::upload_url($data['identity_pic_front']) 		: '';
 			$data['identity_pic_back']    	= !empty($data['identity_pic_back'])		? RC_Upload::upload_url($data['identity_pic_back']) 		: '';
 			$data['personhand_identity_pic']= !empty($data['personhand_identity_pic'])	? RC_Upload::upload_url($data['personhand_identity_pic']) 	: '';
@@ -177,13 +182,24 @@ class merchant extends ecjia_merchant {
 				return $this->showmessage('操作失败', ecjia::MSGTYPE_HTML | ecjia::MSGSTAT_ERROR, array('links' => $links));
 			}
 		}
-
-		$province   = $this->db_region->get_regions(1, 1);
-		$city       = $this->db_region->get_regions(2, $data['province']);
-		$district   = $this->db_region->get_regions(3, $data['city']);
+		
+		$province = ecjia_region::getSubarea(ecjia::config('shop_country'));
 		$this->assign('province', $province);
-		$this->assign('city', $city);
-		$this->assign('district', $district);
+		
+		if (!empty($data['province'])) {
+			$city = ecjia_region::getSubarea($data['province']);
+			$this->assign('city', $city);
+		}
+		
+		if (!empty($data['city'])) {
+			$district = ecjia_region::getSubarea($data['city']);
+			$this->assign('district', $district);
+		}
+		
+		if (!empty($data['district'])) {
+			$street = ecjia_region::getSubarea($data['district']);
+			$this->assign('street', $street);
+		}
 		
 		if ($type == 'edit_apply') {
 			$ur_here = '修改申请';
@@ -205,32 +221,36 @@ class merchant extends ecjia_merchant {
 		$arr['mobile'] = $mobile;
 		$this->assign('form_action', RC_Uri::url('franchisee/merchant/insert', $arr));
 		
+		if (is_ie()) {
+			$browser_warning = '您当前的浏览器版本过低，建议升级您的浏览器或使用chrome内核浏览器！如：360极速浏览器、360安全浏览器（极速模式）、火狐浏览器、谷歌浏览器。';
+			$this->assign('browser_warning', $browser_warning);
+		}
 		$this->display('franchisee.dwt');
 	}
 	
 	public function get_code_value() {
 		$mobile = isset($_GET['mobile']) ? $_GET['mobile'] : '';
-		if (empty($mobile)){
+		if (empty($mobile)) {
 			return $this->showmessage('请输入手机号码', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 		}
-		
-		$code     = rand(100000, 999999);
+		$code = rand(100000, 999999);
 		$options = array(
 			'mobile' => $mobile,
 			'event'	 => 'sms_get_validate',
-			'value'  =>array(
-				'code' 			=> $code,
+			'value'  => array(
+				'code' => $code,
 				'service_phone' => ecjia::config('service_phone'),
 			),
 		);
 		$response = RC_Api::api('sms', 'send_event_sms', $options);
 		
+		$_SESSION['temp_mobile']	= $mobile;
+		$_SESSION['temp_code'] 		= $code;
+		$_SESSION['temp_code_time'] = RC_Time::gmtime();
+		
 		if (is_ecjia_error($response)) {
 			return $this->showmessage($response->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-		}else{
-			$_SESSION['temp_mobile']	= $mobile;
-			$_SESSION['temp_code'] 		= $code;
-			$_SESSION['temp_code_time'] = RC_Time::gmtime();
+		} else {
 			return $this->showmessage('手机验证码发送成功，请注意查收', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS);
 		}
 	}
@@ -264,10 +284,12 @@ class merchant extends ecjia_merchant {
 			if ($type == 'edit_apply') {
 				$arr['type'] = $type;
 				
-				//判预审核表邮箱是否已存在
-				$count_preaudit_email = RC_DB::table('store_preaudit')->where('email', $email)->where('contact_mobile', '!=', $mobile)->count();
-				if ($count_preaudit_email != 0) {
-					return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+				if (!empty($email)) {
+    				//判预审核表邮箱是否已存在
+    				$count_preaudit_email = RC_DB::table('store_preaudit')->where('email', $email)->where('contact_mobile', '!=', $mobile)->count();
+    				if ($count_preaudit_email != 0) {
+    					return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
 				}
 			} else {
 				if (empty($code) || $code != $_SESSION['temp_code'] || $time >= $_SESSION['temp_code_time'] || $mobile != $_SESSION['temp_mobile']) {
@@ -295,10 +317,12 @@ class merchant extends ecjia_merchant {
 					return $this->showmessage('该手机号已申请入驻，无法再次申请', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
 				
-				//判断预审核表邮箱是否已存在
-				$count_preaudit_email = RC_DB::table('store_preaudit')->where('email', $email)->count();
-				if ($count_preaudit_email != 0) {
-					return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+				if (!empty($email)) {
+    				//判断预审核表邮箱是否已存在
+    				$count_preaudit_email = RC_DB::table('store_preaudit')->where('email', $email)->count();
+    				if ($count_preaudit_email != 0) {
+    					return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
 				}
 			}
 			
@@ -308,13 +332,16 @@ class merchant extends ecjia_merchant {
 				return $this->showmessage('该手机号码已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 			}
 			
-			//判断商家表邮箱是否已存在
-			$count_franchisee_email = RC_DB::table('store_franchisee')->where('email', $email)->count();
-			//判断员工表邮箱是否存在
-			$count_staff_email = RC_DB::table('staff_user')->where('email', $email)->count();
-			if ($count_franchisee_email != 0 || $count_staff_email != 0) {
-				return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+			if (!empty($email)) {
+			    //判断商家表邮箱是否已存在
+    			$count_franchisee_email = RC_DB::table('store_franchisee')->where('email', $email)->count();
+    			//判断员工表邮箱是否存在
+    			$count_staff_email = RC_DB::table('staff_user')->where('email', $email)->count();
+    			if ($count_franchisee_email != 0 || $count_staff_email != 0) {
+    				return $this->showmessage('该邮箱已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    			}
 			}
+			
 			
 			$_SESSION['validate_type'] 		= $validate_type;
 			$_SESSION['responsible_person'] = $responsible_person;
@@ -337,9 +364,10 @@ class merchant extends ecjia_merchant {
 			$address			= !empty($_POST['address'])  			? trim($_POST['address'])				: '';			//通讯地址
 			$contact_mobile		= !empty($_POST['contact_mobile'])  	? trim($_POST['contact_mobile'])		: '';			//联系方式
 			
-			$province			= !empty($_POST['province'])			? intval($_POST['province'])			: 0;			//省
-			$city				= !empty($_POST['city'])				? intval($_POST['city'])				: 0;			//城市
-			$district			= !empty($_POST['district'])			? intval($_POST['district'])			: 0;			//地区
+			$province			= !empty($_POST['province'])			? trim($_POST['province'])			: '';			//省
+			$city				= !empty($_POST['city'])				? trim($_POST['city'])				: '';			//城市
+			$district			= !empty($_POST['district'])			? trim($_POST['district'])			: '';			//地区
+			$street				= !empty($_POST['street'])			? trim($_POST['street'])			: '';				//街道
 			
 			$identity_type		= !empty($_POST['identity_type'])		? intval($_POST['identity_type'])		: 1;			//证件类型
 			$identity_number	= !empty($_POST['identity_number'])		? trim($_POST['identity_number'])		: '';			//证件号码
@@ -368,7 +396,7 @@ class merchant extends ecjia_merchant {
 					return $this->showmessage('该手机号已申请入驻，无法再次申请', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
 			}
-			
+			 
 			if (empty($merchants_name)) {
 				return $this->showmessage('店铺名称不能为空', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 			} else {
@@ -382,6 +410,10 @@ class merchant extends ecjia_merchant {
 				if ($count_merchants_name != 0 || $count_franchisee_merchant != 0) {
 					return $this->showmessage('店铺名称已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
+			}
+			
+			if (empty($longitude) || empty($latitude)) {
+				return $this->showmessage('请点击获取精准坐标获取店铺经纬度', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 			}
 			
 			$info = RC_DB::table('store_preaudit')->where('contact_mobile', $mobile)->first();
@@ -480,6 +512,7 @@ class merchant extends ecjia_merchant {
 				'province'					=> $province,
 				'city'						=> $city,
 				'district'					=> $district,
+				'street'					=> $street,
 				'address'      				=> $address,				//通讯地址
 					
 				'identity_type'     		=> $identity_type,
@@ -534,6 +567,11 @@ class merchant extends ecjia_merchant {
 	}
 	
 	public function view() {
+		if (ecjia::config('merchant_join_close') == 1) {
+			return $this->showmessage('抱歉，该网站已关闭入驻商加盟！', ecjia::MSGTYPE_HTML | ecjia::MSGSTAT_ERROR);
+		}
+		
+		$this->unset_login_info();
 		$this->assign('ur_here', '查询审核进度');
 		$this->assign('action_link', array('href' => RC_Uri::url('franchisee/merchant/init'), 'text' => '申请入驻'));
 		
@@ -633,49 +671,71 @@ class merchant extends ecjia_merchant {
 	}
 	
 	/**
-	 * 获取指定地区的子级地区
-	 */
-	public function get_region(){
-		$type      		= !empty($_GET['type'])   ? intval($_GET['type'])   : 0;
-		$parent        	= !empty($_GET['parent']) ? intval($_GET['parent']) : 0;
-		$arr['regions'] = $this->db_region->get_regions($type, $parent);
-		$arr['type']    = $type;
-		$arr['target']  = !empty($_GET['target']) ? stripslashes(trim($_GET['target'])) : '';
-		$arr['target']  = htmlspecialchars($arr['target']);
-		echo json_encode($arr);
-	}
-	
-	/**
 	 * 根据地区获取经纬度
 	 */
 	public function getgeohash(){
-		$shop_province      = !empty($_REQUEST['province'])    ? intval($_REQUEST['province'])           : 0;
-		$shop_city          = !empty($_REQUEST['city'])        ? intval($_REQUEST['city'])               : 0;
-		$shop_district      = !empty($_REQUEST['district'])    ? intval($_REQUEST['district'])           : 0;
-		$shop_address       = !empty($_REQUEST['address'])     ? htmlspecialchars($_REQUEST['address'])  : 0;
+		$shop_province      = !empty($_REQUEST['province'])    ? trim($_REQUEST['province'])             : '';
+		$shop_city          = !empty($_REQUEST['city'])        ? trim($_REQUEST['city'])                 : '';
+		$shop_district      = !empty($_REQUEST['district'])    ? trim($_REQUEST['district'])             : '';
+		$shop_street      	= !empty($_REQUEST['street'])     ? trim($_REQUEST['street'])               : '';
+		$shop_address       = !empty($_REQUEST['address'])     ? htmlspecialchars($_REQUEST['address'])  : '';
 		
-		if(empty($shop_province)){
+		if (empty($shop_province)) {
 			return $this->showmessage('请选择省份', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'province'));
 		}
-		if(empty($shop_city)){
+		if (empty($shop_city)) {
 			return $this->showmessage('请选择城市', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'city'));
 		}
-		if(empty($shop_district)){
+		if (empty($shop_district)) {
 			return $this->showmessage('请选择地区', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'district'));
 		}
-		if(empty($shop_address)){
+		if (empty($shop_street)) {
+			return $this->showmessage('请选择街道', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'street'));
+		}
+		if (empty($shop_address)) {
 			return $this->showmessage('请填写详细地址', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'address'));
 		}
-		$city_name = RC_DB::table('region')->where('region_id', $shop_city)->pluck('region_name');
-		$city_district = RC_DB::table('region')->where('region_id', $shop_district)->pluck('region_name');
-		$address = $city_name.'市'.$shop_address;
-		
-		$shop_point = file_get_contents("https://api.map.baidu.com/geocoder/v2/?address='".$address."&output=json&ak=E70324b6f5f4222eb1798c8db58a017b");
-		$shop_point = (array)json_decode($shop_point);
-		$shop_point['result'] = (array)$shop_point['result'];
-		
-		$location = (array)$shop_point['result']['location'];
-		echo json_encode($location);
+		$key = ecjia::config('map_qq_key');
+        if (empty($key)) {
+        	return $this->showmessage('腾讯地图key不能为空', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+        }
+        $province_name  = ecjia_region::getRegionName($shop_province);
+        $city_name      = ecjia_region::getRegionName($shop_city);
+        $district_name  = ecjia_region::getRegionName($shop_district);
+        $street_name  	= ecjia_region::getRegionName($shop_street);
+        
+        $address = '';
+		if (!empty($province_name)) {
+			$address .= $province_name;
+		}
+		if (!empty($city_name)) {
+			$address .= $city_name;
+		}
+		if (!empty($district_name)) {
+			$address .= $district_name;
+		}
+		if (!empty($street_name)) {
+			$address .= $street_name;
+		}
+		$address .= $shop_address;
+		$address = urlencode($address);
+				
+        $shop_point = RC_Http::remote_get("https://apis.map.qq.com/ws/geocoder/v1/?address=".$address."&key=".$key);
+        $shop_point = json_decode($shop_point['body'], true);
+
+		if ($shop_point['status'] != 0) {
+			return $this->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, $shop_point);
+		}
+        return $this->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, $shop_point);
+	}
+	
+	public function get_region() {
+		$parent_id	= $_GET['parent'];//上级区域编码
+		$arr['regions'] = with(new Ecjia\App\Setting\Region)->getSubarea($parent_id);//传参请求当前国家下信息
+		$arr['target']  = stripslashes(trim($_GET['target']));
+		$arr['target']  = htmlspecialchars($arr['target']);
+	
+		echo json_encode($arr);
 	}
 	
 	/**
@@ -722,12 +782,22 @@ class merchant extends ecjia_merchant {
 	}
 	
 	/**
-	 * 获取地区名称
+	 * 清除登录信息
 	 */
-	private function get_region_name($id){
-		return $this->db_region->where(array('region_id' => $id))->get_field('region_name');
+	private function unset_login_info() {
+		if (isset($_SESSION['staff_id']) && intval($_SESSION['staff_id']) > 0) {
+			RC_Session::destroy();
+		}
+		$staff_id = RC_Cookie::get('ECJAP[staff_id]');
+		$staff_pass = RC_Cookie::get('ECJAP[staff_pass]');
+		if (!empty($staff_id) && !empty($staff_pass)) {
+			RC_Cookie::delete('ECJAP.staff_id');
+			RC_Cookie::delete('ECJAP.staff_pass');
+		}
+		unset($staff_id);
+		unset($staff_pass);
+		return;
 	}
-	
 }
 
 // end

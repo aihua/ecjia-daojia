@@ -705,37 +705,6 @@ function exist_real_goods($order_id = 0, $flow_type = CART_GENERAL_GOODS) {
 }
 
 /**
-* 查询配送区域属于哪个办事处管辖
-* @param   array   $regions	配送区域（1、2、3、4级按顺序）
-* @return  int	 办事处id，可能为0
-*/
-function get_agency_by_regions($regions) {
-	$db = RC_Loader::load_app_model('region_model','shipping');
-	if (!is_array($regions) || empty($regions)) {
-		return 0;
-	}
-
-	$arr = array();
-	$data = $db->field('region_id, agency_id')->where(array('region_id' => array('gt' => 0) , 'agency_id' => array('gt' => 0)))->in(array('region_id' =>$regions))->select();
-
-	if(!empty($data)) {
-		foreach ($data as $row) {
-			$arr[$row['region_id']] = $row['agency_id'];
-		}
-	}
-	if (empty($arr)) {
-		return 0;
-	}
-
-	$agency_id = 0;
-	for ($i = count($regions) - 1; $i >= 0; $i--) {
-		if (isset($arr[$regions[$i]])) {
-			return $arr[$regions[$i]];
-		}
-	}
-}
-
-/**
 * 改变订单中商品库存
 * @param   int	 $order_id   订单号
 * @param   bool	$is_dec	 是否减少库存
@@ -964,21 +933,33 @@ function order_bonus($order_id) {
 	$day	= getdate();
 	$today	= RC_Time::local_mktime(23, 59, 59, $day['mon'], $day['mday'], $day['year']);
 
-	$dbview->view = array(
-		'goods' => array(
-			'type'	=> Component_Model_View::TYPE_LEFT_JOIN,
-			'alias'	=> 'g',
-			'field'	=> 'b.type_id, b.type_money, SUM(o.goods_number) AS number',
-			'on'	=> 'o.goods_id = g.goods_id',
-		),
-		'bonus_type' => array(
-			'type'	=> Component_Model_View::TYPE_LEFT_JOIN,
-			'alias'	=> 'b',
-			'on'	=> 'g.bonus_type_id = b.type_id ',
-		)
-	);
+	// $dbview->view = array(
+	// 	'goods' => array(
+	// 		'type'	=> Component_Model_View::TYPE_LEFT_JOIN,
+	// 		'alias'	=> 'g',
+	// 		'field'	=> 'b.type_id, b.type_money, SUM(o.goods_number) AS number',
+	// 		'on'	=> 'o.goods_id = g.goods_id',
+	// 	),
+	// 	'bonus_type' => array(
+	// 		'type'	=> Component_Model_View::TYPE_LEFT_JOIN,
+	// 		'alias'	=> 'b',
+	// 		'on'	=> 'g.bonus_type_id = b.type_id ',
+	// 	)
+	// );
 
-	$list = $dbview->where(array('o.order_id' => $order_id , 'o.is_gift' => 0 , 'b.send_type' => SEND_BY_GOODS , 'b.send_start_date' => array('elt' => $today) , 'b.send_end_date' => array('egt' => $today)))->group('b.type_id')->select();
+	// $list = $dbview->where(array('o.order_id' => $order_id , 'o.is_gift' => 0 , 'b.send_type' => SEND_BY_GOODS , 'b.send_start_date' => array('elt' => $today) , 'b.send_end_date' => array('egt' => $today)))->group('b.type_id')->select();
+
+	$list = RC_DB::table('order_goods as o')
+		->leftJoin('goods as g', RC_DB::raw('o.goods_id'), '=', RC_DB::raw('g.goods_id'))
+		->leftJoin('bonus_type as b', RC_DB::raw('g.bonus_type_id'), '=', RC_DB::raw('b.type_id'))
+		->where(RC_DB::raw('o.order_id'), $order_id)
+		->where(RC_DB::raw('o.is_gift'), 0)
+		->where(RC_DB::raw('b.send_type'), SEND_BY_GOODS)
+		->where(RC_DB::raw('b.send_start_date'), '<=', $today)
+		->where(RC_DB::raw('b.send_end_date'), '>=', $today)
+		->groupBy(RC_DB::raw('b.type_id'))
+		->get();
+
 	/* 查询定单中非赠品总金额 */
 	$amount = order_amount($order_id, false);
 
@@ -1103,7 +1084,6 @@ function get_consignee($user_id) {
 * @return  bool	true 完整 false 不完整
 */
 function check_consignee_info($consignee, $flow_type) {
-	$db = RC_Loader::load_app_model('region_model','shipping');
     if (exist_real_goods(0, $flow_type)) {
         /* 如果存在实体商品 */
         $res = !empty($consignee['consignee']) &&
@@ -1114,14 +1094,14 @@ function check_consignee_info($consignee, $flow_type) {
         if ($res) {
             if (empty($consignee['province'])) {
                 /* 没有设置省份，检查当前国家下面有没有设置省份 */
-                $pro = $db->get_regions(1, $consignee['country']);
+                $pro = ecjia_region::getSubarea($consignee['country']);
                 $res = empty($pro);
             } elseif (empty($consignee['city'])) {
                 /* 没有设置城市，检查当前省下面有没有城市 */
-                $city = $db->get_regions(2, $consignee['province']);
+                $city = ecjia_region::getSubarea($consignee['province']);
                 $res = empty($city);
             } elseif (empty($consignee['district'])) {
-                $dist = $db->get_regions(3, $consignee['city']);
+                $dist = ecjia_region::getSubarea($consignee['city']);
                 $res = empty($dist);
             }
         }

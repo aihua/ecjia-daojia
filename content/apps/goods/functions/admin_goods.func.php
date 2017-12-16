@@ -547,56 +547,58 @@ function get_category_recommend_goods($type = '', $cats = '', $brand = 0, $min =
  * @return void
  */
 function get_goods_info($goods_id, $warehouse_id = 0, $area_id = 0) {
-	$db_goods = RC_Model::model('goods/goods_auto_viewmodel');
 	RC_Loader::load_app_func('global', 'goods');
 	$time = RC_Time::gmtime();
-
-	$field = "g.*,  g.model_price, g.model_attr, ".
-	    ' c.measure_unit, g.brand_id as brand_id, b.brand_logo, g.comments_number, g.sales_volume,b.brand_name AS goods_brand, m.type_money AS bonus_money, ' .
-	    'IFNULL(AVG(r.comment_rank), 0) AS comment_rank, ' .
-	    "IFNULL(mp.user_price, g.shop_price * '$_SESSION[discount]') AS rank_price ";
-
-	$db_goods->view = array (
-		'category' => array(
-			'type'     => Component_Model_View::TYPE_LEFT_JOIN,
-			'alias'    => 'c',
-			'on'       => 'g.cat_id = c.cat_id'
-		),
-		'brand' => array(
-			'type'     => Component_Model_View::TYPE_LEFT_JOIN,
-			'alias'    => 'b',
-			'on'       => 'g.brand_id = b.brand_id '
-		),
-		'comment' => array(
-			'type' => Component_Model_View::TYPE_LEFT_JOIN,
-			'alias' => 'r',
-			'on' => 'r.id_value = g.goods_id AND comment_type = 0 AND r.parent_id = 0 AND r.status = 1'
-		),
-		'bonus_type' => array(
-			'type' => Component_Model_View::TYPE_LEFT_JOIN,
-			'alias' => 'm',
-			'on' => 'g.bonus_type_id = m.type_id AND m.send_start_date <= "' . $time . '" AND m.send_end_date >= "' . $time . '"'
-		),
-		'member_price'   => array(
-			'type'     => Component_Model_View::TYPE_LEFT_JOIN,
-			'alias'    => 'mp',
-			'on'       => 'mp.goods_id = g.goods_id AND mp.user_rank = "' . $_SESSION ['user_rank'] . '"'
-		)
-	);
-
-	$where = array('g.goods_id' => $goods_id/* , 'g.is_delete' => 0 */);
+    
+	$db_goods = RC_DB::table('goods')->where('goods_id', $goods_id);
 	
 	if (!empty($_SESSION['store_id'])) {
 		if (ecjia::config('review_goods')) {
-			$where['g.review_status'] = array('gt' => 2);
+			$db_goods->where('review_status', '>', 2);
 		}
 	} else {
-		$where['g.review_status'] = array('gt' => 2);
+		$db_goods->where('review_status', '>', 2);
 	}
-    $row = $db_goods->field($field)->group('g.goods_id')->find($where);
-
+    //商品信息
+    $row = $db_goods->first();
+    
+    //分类信息
+    $cat_info = RC_DB::table('category')->where('cat_id', $row['cat_id'])->first();
+    $row['measure_unit'] = $cat_info['measure_unit'];
+    
+    //品牌信息
+    $brand_info = RC_DB::table('brand')->where('brand_id', $row['brand_id'])->first();
+    $row['brand_logo'] = $brand_info['brand_logo'];
+    $row['goods_brand'] = $brand_info['brand_name'];
+    
+    //评论信息
+    $comment_info = RC_DB::table('comment')
+    	->selectRaw('IFNULL(AVG(comment_rank), 0) AS comment_rank')
+    	->where('id_value', $goods_id)
+    	->where('comment_type', 0)
+    	->where('parent_id', 0)
+    	->where('status', 1)
+    	->first();
+    $row['comment_rank'] = $comment_info['comment_rank'];
+    
+    //红包类型信息
+   	$bonus_info = RC_DB::table('bonus_type')
+    	->where('type_id', $row['bonus_type_id'])
+    	->where('send_start_date', '<=', $time)
+    	->where('send_end_date', '>=', $time)
+    	->first();
+   	$row['bonus_money'] = $bonus_info['type_money'];
+	    
+    //会员价格信息
+    $member_price_info = RC_DB::table('member_price')
+    	->selectRaw("IFNULL(user_price, $row[shop_price] * '$_SESSION[discount]') AS rank_price")
+    	->where('goods_id', $goods_id)
+    	->where('user_rank', $_SESSION['user_rank'])
+    	->first();
+    $row['rank_price'] = $member_price_info['rank_price'];
+    
 	$count = RC_DB::table('store_franchisee')->where('shop_close', '0')->where('store_id', $row['store_id'])->count();
-	if(empty($count)){
+	if (empty($count)) {
 		return false;
 	}
 
@@ -605,7 +607,7 @@ function get_goods_info($goods_id, $warehouse_id = 0, $area_id = 0) {
 		/* 用户评论级别取整 */
 		$row ['comment_rank'] = ceil ( $row ['comment_rank'] ) == 0 ? 5 : ceil ( $row ['comment_rank'] );
 		/* 获得商品的销售价格 */
-		$row ['market_price'] = price_format($row ['market_price']);
+		$row ['market_price'] = $row ['market_price'];
 		$row ['shop_price_formated'] = price_format ($row ['shop_price'] );
 
 		/* 修正促销价格 */
@@ -1008,7 +1010,7 @@ function bargain_price($price, $start, $end) {
  *        	规格ID的数组或者逗号分隔的字符串
  * @return void
  */
-function spec_price($spec, $goods_id = 0, $warehouse_area= array()) {
+function spec_price($spec, $goods_id = 0) {
 	$db_goods = RC_Model::model('goods/goods_model');
 	$db = RC_Model::model('goods/goods_attr_model');
 	if (! empty ( $spec )) {
@@ -1019,20 +1021,7 @@ function spec_price($spec, $goods_id = 0, $warehouse_area= array()) {
 		} else {
 			$spec = addslashes ( $spec );
 		}
-		$model_attr = $db_goods->where(array('goods_id' => $goods_id))->get_field('model_attr');
-
-		if ($model_attr == 1) { //仓库属性
-			$db_warehouse_attr = RC_Model::model('warehouse/warehouse_attr_model');
-			$warehouse_id = $warehouse_area['warehouse_id'];
-			$price = $db_warehouse_attr->in(array('goods_attr_id' => $spec))->where(array('goods_id' => $goods_id, 'warehouse_id' => $warehouse_id))->sum('`attr_price`|attr_price');
-
-		} elseif ($model_attr == 2) { //地区属性
-			$db_warehouse_area_attr = RC_Model::model('warehouse/warehouse_area_attr_model');
-			$area_id = $warehouse_area['area_id'];
-			$price = $db_warehouse_area_attr->in(array('goods_attr_id' => $spec))->where(array('goods_id' => $goods_id, 'area_id' => $area_id))->sum('`attr_price`|attr_price');
-		} elseif ($model_attr == 0){
-			$price = $db->in(array('goods_attr_id' => $spec))->sum('`attr_price`|attr_price');
-		}
+		$price = $db->in(array('goods_attr_id' => $spec))->sum('`attr_price`|attr_price');
 	} else {
 		$price = 0;
 	}
@@ -1465,7 +1454,7 @@ function get_goods_fittings($goods_list = array()) {
  * @param array $spec_goods_attr_id
  * @return array
  */
-function get_products_info($goods_id, $spec_goods_attr_id, $warehouse_id=0, $area_id=0) {
+function get_products_info($goods_id, $spec_goods_attr_id) {
 	$model_attr = RC_DB::table('goods')->where('goods_id', $goods_id)->pluck('model_attr');
 
 	$return_array = array ();
@@ -1768,13 +1757,20 @@ function get_where_sql($filter) {
  *
  * @access  public
  * @param   integer     $selected   选定的类型编号
+ * @param   integer     $store_id	店铺id
+ * @param   boolean		是否显示平台规格
  * @return  string
  */
-function goods_type_list($selected, $store_id = 0) {
+function goods_type_list($selected, $store_id = 0, $show_all = false) {
 	$db_goods_type = RC_DB::table('goods_type')->select('cat_id', 'cat_name')->where('enabled', 1);
 
-	if (!empty($store_id)) {
-		$db_goods_type->where('store_id', $store_id);
+	$db_goods_type->where('store_id', $store_id);
+	if ($show_all) {
+		//自营商家可以使用平台后台添加的商品规格
+		$store_info = RC_DB::table('store_franchisee')->where('store_id', $store_id)->first();
+		if ($store_info['manage_mode'] == 'self') {
+			$db_goods_type->orWhere('store_id', 0);
+		}
 	}
 	$data = $db_goods_type->get();
 

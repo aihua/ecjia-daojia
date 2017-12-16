@@ -50,11 +50,8 @@ defined('IN_ECJIA') or exit('No permission resources.');
  * 入驻商家待审核列表
  */
 class admin_preaudit extends ecjia_admin {
-	private $db_region;
 	public function __construct() {
 		parent::__construct();
-
-		$this->db_region = RC_Model::model('store/region_model');
 
 		//全局JS和CSS
 		RC_Script::enqueue_script('smoke');
@@ -70,7 +67,7 @@ class admin_preaudit extends ecjia_admin {
 
 		RC_Script::enqueue_script('store', RC_App::apps_url('statics/js/store.js', __FILE__));
 		RC_Script::enqueue_script('region',RC_Uri::admin_url('statics/lib/ecjia-js/ecjia.region.js'));
-		RC_Script::enqueue_script('map', 'https://api.map.baidu.com/api?v=2.0&ak=P4C6rokKFWHjXELjOnogw3zbxC0VYubo');
+		RC_Script::enqueue_script('qq_map', 'https://map.qq.com/api/js?v=2.exp');
 
 		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('store::store.store_preaudit'), RC_Uri::url('store/admin_preaudit/init')));
 
@@ -91,6 +88,9 @@ class admin_preaudit extends ecjia_admin {
 	    $store_list = $this->store_preaudit_list();
 	    $this->assign('store_list', $store_list);
 
+	    $cat_list   = $this->get_cat_select_list();
+	    
+	    $this->assign('cat_list', $cat_list);
 	    $this->assign('search_action', RC_Uri::url('store/admin_preaudit/init'));
 
 	    $this->display('store_preaudit_list.dwt');
@@ -114,12 +114,15 @@ class admin_preaudit extends ecjia_admin {
 		$id    = intval($_GET['id']);
 		$store = RC_DB::table('store_preaudit')->where('id', $id)->first();
 
-		$province   = $this->db_region->get_regions(1, 1);
-		$city       = $this->db_region->get_regions(2, $store['province']);
-		$district   = $this->db_region->get_regions(3, $store['city']);
-		$this->assign('province', $province);
-		$this->assign('city', $city);
-		$this->assign('district', $district);
+        $provinces = ecjia_region::getSubarea(ecjia::config('shop_country'));
+        $cities = ecjia_region::getSubarea($store['province']);
+        $districts = ecjia_region::getSubarea($store['city']);
+        $streets = ecjia_region::getSubarea($store['district']);
+        
+        $this->assign('province', $provinces);
+        $this->assign('city', $cities);
+        $this->assign('district', $districts);
+        $this->assign('street', $streets);
 
 		$certificates_list = array(
 			'1' => RC_Lang::get('store::store.people_id'),
@@ -222,19 +225,23 @@ class admin_preaudit extends ecjia_admin {
 			'province'					=> !empty($_POST['province'])				? $_POST['province']            : '',
 			'city'						=> !empty($_POST['city'])					? $_POST['city']                : '',
 			'district'					=> !empty($_POST['district'])				? $_POST['district']            : '',
+			'street'	    	 		=> !empty($_POST['street']) 				? $_POST['street'] 				: '',
 			'bank_address'         		=> !empty($_POST['bank_address']) 			? $_POST['bank_address']        : '',
 			'longitude'         		=> !empty($_POST['longitude']) 				? $_POST['longitude']           : '',
 			'latitude'         			=> !empty($_POST['latitude']) 				? $_POST['latitude']            : '',
 		);
 		
-		$franchisee_count = 0;
-		if ($info['store_id']) {
-		    $franchisee_count = RC_DB::table('store_franchisee')->where('email', '=', $data['email'])->where('store_id', '!=', $info['store_id'])->count();
+		if (!empty($data['email'])) {
+		    $franchisee_count = 0;
+    		if ($info['store_id']) {
+    		    $franchisee_count = RC_DB::table('store_franchisee')->where('email', '=', $data['email'])->where('store_id', '!=', $info['store_id'])->count();
+    		}
+    		$preaudit_count   = RC_DB::table('store_preaudit')->where('email', '=', $data['email'])->where('id', '!=', $id)->count();
+    		if ($franchisee_count || $preaudit_count) {
+    		    return $this->showmessage('该邮箱已经使用，请填写其他邮箱地址', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    		}
 		}
-		$preaudit_count   = RC_DB::table('store_preaudit')->where('email', '=', $data['email'])->where('id', '!=', $id)->count();
-		if ($franchisee_count || $preaudit_count) {
-		    return $this->showmessage('该邮箱已经使用，请填写其他邮箱地址', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-		}
+		
 		$franchisee_count = 0;
 		if ($info['store_id']) {
 		    $franchisee_count = RC_DB::table('store_franchisee')->where('contact_mobile', '=', $data['contact_mobile'])->where('store_id', '!=', $info['store_id'])->count();
@@ -277,12 +284,12 @@ class admin_preaudit extends ecjia_admin {
 		if (empty($info)) {
 		    return $this->showmessage('信息不存在或已处理完成', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR,  array('pjaxurl' => RC_Uri::url('store/admin_preaudit/init')));
 		}
-		$info['province'] = RC_DB::table('region')->where('region_id', $info['province'])->pluck('region_name');
+		$info['province'] 	= ecjia_region::getRegionName($info['province']);
+		$info['city'] 		= ecjia_region::getRegionName($info['city']);
+		$info['district'] 	= ecjia_region::getRegionName($info['district']);
+		$info['street'] 	= ecjia_region::getRegionName($info['street']);
 
-		$info['city'] = RC_DB::table('region')->where('region_id', $info['city'])->pluck('region_name');
-
-		$info['district'] = RC_DB::table('region')->where('region_id', $info['district'])->pluck('region_name');
-
+		
 		$info['apply_time']	= RC_Time::local_date(ecjia::config('time_format'), $info['apply_time']);
 		$info['cat_name'] = RC_DB::table('store_category')->where('cat_id', $info['cat_id'])->pluck('cat_name');
 		$this->assign('store', $info);
@@ -316,13 +323,12 @@ class admin_preaudit extends ecjia_admin {
 		$store_id   = intval($_POST['store_id']);
 		$remark 	=!empty($_POST['remark']) ? $_POST['remark'] : null;
 		//通过
-		if($_POST['check_status'] == 2) {
-			if(empty($store_id)) {//首次审核
+		if ($_POST['check_status'] == 2) {
+			if (empty($store_id)) {//首次审核
 				$store        = RC_DB::table('store_preaudit')->where('id', $id)->first();
 				$geohash      = RC_Loader::load_app_class('geohash', 'store');
 				$geohash_code = $geohash->encode($store['latitude'] , $store['longitude']);
 				$geohash_code = substr($geohash_code, 0, 10);
-
 				if (empty($store['merchants_name'])) {
 				    return $this->showmessage('店铺名称不能为空', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
@@ -330,37 +336,39 @@ class admin_preaudit extends ecjia_admin {
 				if ($count > 0) {
 				    return $this->showmessage('店铺名称已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
-				$data =array(
+				$data = array(
 					'cat_id' 					=> $store['cat_id'] ? $store['cat_id'] : 0,
+				    'validate_type' 			=> $store['validate_type'],
 					'merchants_name'			=> $store['merchants_name'],
 					'shop_keyword'				=> $store['shop_keyword'],
 					'status'					=> 1,
 // 				    'identity_status'           => intval($_POST['identity_status']),
-					'responsible_person'		=>$store['responsible_person'],
-					'company_name'				=>$store['company_name'],
-					'email'						=>$store['email'],
-					'contact_mobile'			=>$store['contact_mobile'],
-					'apply_time'				=>$store['apply_time'],
-					'confirm_time'				=>RC_Time::gmtime(),
-					'address'					=>$store['address'],
-					'identity_type'				=>$store['identity_type'],
-					'identity_number'			=>$store['identity_number'],
-					'identity_pic_front'		=>$store['identity_pic_front'],
-					'identity_pic_back'			=>$store['identity_pic_back'],
-					'personhand_identity_pic'	=>$store['personhand_identity_pic'],
-					'business_licence'			=>$store['business_licence'],
-					'business_licence_pic'		=>$store['business_licence_pic'],
-					'bank_name'					=>$store['bank_name'],
-					'province'					=>$store['province'],
-					'city'						=>$store['city'],
-					'district'					=>$store['district'],
-					'bank_branch_name'			=>$store['bank_branch_name'],
-					'bank_account_number'		=>$store['bank_account_number'],
-					'bank_address'				=>$store['bank_address'],
-					'remark'					=>$remark,
-					'longitude'					=>$store['longitude'],
-					'latitude'					=>$store['latitude'],
-				    'geohash'                   =>$geohash_code,
+					'responsible_person'		=> $store['responsible_person'],
+					'company_name'				=> $store['company_name'],
+					'email'						=> $store['email'],
+					'contact_mobile'			=> $store['contact_mobile'],
+					'apply_time'				=> $store['apply_time'],
+					'confirm_time'				=> RC_Time::gmtime(),
+				    'expired_time'				=> RC_Time::local_strtotime("+1 year"),
+					'address'					=> $store['address'],
+					'identity_type'				=> $store['identity_type'],
+					'identity_number'			=> $store['identity_number'],
+					'identity_pic_front'		=> $store['identity_pic_front'],
+					'identity_pic_back'			=> $store['identity_pic_back'],
+					'personhand_identity_pic'	=> $store['personhand_identity_pic'],
+					'business_licence'			=> $store['business_licence'],
+					'business_licence_pic'		=> $store['business_licence_pic'],
+					'bank_name'					=> $store['bank_name'],
+					'province'					=> $store['province'],
+					'city'						=> $store['city'],
+					'district'					=> $store['district'],
+					'bank_branch_name'			=> $store['bank_branch_name'],
+					'bank_account_number'		=> $store['bank_account_number'],
+					'bank_address'				=> $store['bank_address'],
+					'remark'					=> $remark,
+					'longitude'					=> $store['longitude'],
+					'latitude'					=> $store['latitude'],
+				    'geohash'                   => $geohash_code,
 					'sort_order' 				=> 50,
 				);
 				
@@ -372,49 +380,45 @@ class admin_preaudit extends ecjia_admin {
 				if ($is_exist) {
 				    return $this->showmessage('联系手机员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
-				$is_exist = RC_DB::table('store_franchisee')->where('email', $data['email'])->get();
-				if ($is_exist) {
-				    return $this->showmessage('邮箱已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-				}
-				$is_exist = RC_DB::table('staff_user')->where('email', $data['email'])->get();
-				if ($is_exist) {
-				    return $this->showmessage('邮箱员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+				if (!empty($data['email'])) {
+				    $is_exist = RC_DB::table('store_franchisee')->where('email', $data['email'])->get();
+    				if ($is_exist) {
+    				    return $this->showmessage('邮箱已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
+    				$is_exist = RC_DB::table('staff_user')->where('email', $data['email'])->get();
+    				if ($is_exist) {
+    				    return $this->showmessage('邮箱员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
 				}
 				
 				RC_Logger::getlogger('new_store')->info($data);
 				$store_id = RC_DB::table('store_franchisee')->insertGetId($data);
 				RC_DB::table('store_preaudit')->where('id', $id)->delete();
-
+				
 				//审核通过产生店铺中的code
 				$merchant_config = array(
-// 					'shop_title' ,                // 店铺标题
-// 					'shop_kf_email' ,             // 客服邮件地址
-// 					'shop_kf_type' ,              // 客服样式
-// 					'shop_kf_qq'  ,               // 客服QQ号码
-// 					'shop_kf_ww' ,                // 客服淘宝旺旺
-// 					'shop_front_logo',            // 店铺封面图
-// 					'shop_thumb_logo' ,           // Logo缩略图
-// 					'shop_qrcode_logo' ,          // 二维码中间Logo
-				    'shop_logo' ,                 // 默认店铺页头部LOGO
-				    'shop_nav_background',        // 店铺导航背景图
-				    'shop_banner_pic' ,           // app banner图
-				    'shop_kf_mobile' ,            // 客服手机号码
+					'shop_logo' ,                 // 默认店铺页头部LOGO
+					'shop_nav_background',        // 店铺导航背景图
+					'shop_banner_pic' ,           // app banner图
+					'shop_kf_mobile' ,            // 客服手机号码
 					'shop_trade_time' ,           // 营业时间
 					'shop_description' ,          // 店铺描述
 					'shop_notice'   ,             // 店铺公告
 					'shop_review_goods',          // 店铺商品审核状态，平台开启审核时店铺优先级高于平台设置
-					'express_assign_auto',		  // o2o配送自动派单开关	
+					'express_assign_auto',		  // o2o配送自动派单开关
 				);
-				$merchants_config = RC_DB::table('merchants_config');
+				
+// 				$merchants_config = RC_DB::table('merchants_config');//不能写外面
 				foreach ($merchant_config as $val) {
-					$count= $merchants_config->where(RC_DB::raw('store_id'), $store_id)->where(RC_DB::raw('code'), $val)->count();
+					//RC_DB::table一定要写在里面 不然每次循环都会追加where条件
+					$count = RC_DB::table('merchants_config')->where('store_id', $store_id)->where('code', $val)->count();
 					if ($count == 0) {
-						$merchants_config->insert(array('store_id' => $store_id, 'code' => $val));
+						RC_DB::table('merchants_config')->insert(array('store_id' => $store_id, 'code' => $val));
 					}
 				}
-
+				
 				//审核通过产生一个主员工的资料
-				$password	= rand(100000,999999);
+				$password = rand(100000,999999);
 				$salt = rand(1, 9999);
 				$data_staff = array(
 					'mobile' 		=> $store['contact_mobile'],
@@ -422,7 +426,6 @@ class admin_preaudit extends ecjia_admin {
 					'name' 			=> $store['responsible_person'],
 					'nick_name' 	=> '',
 					'user_ident' 	=> 'SC001',
-					'email' 		=> $store['email'],
 					'password' 		=> md5(md5($password) . $salt),
 					'salt'			=> $salt,
 					'add_time' 		=> RC_Time::gmtime(),
@@ -433,27 +436,11 @@ class admin_preaudit extends ecjia_admin {
 					'avatar' 		=> '',
 					'introduction' 	=> '',
 				);
-				RC_DB::table('staff_user')->insertGetId($data_staff);
-				
-				//短信发送通知
-				$options = array(
-					'mobile' => $store['contact_mobile'],
-					'event'	 => 'sms_jion_merchant',
-					'value'  =>array(
-						'user_name' =>$store['responsible_person'],
-						'shop_name' => ecjia::config('shop_name'),
-						'account'	=> $store['contact_mobile'],
-						'password'	=> $password,
-						'service_phone'=> ecjia::config('service_phone'),
-					),
-				);
-				$response = RC_Api::api('sms', 'send_event_sms', $options);
-				if (is_ecjia_error($response)) {
-					return $this->showmessage($response->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+				if (!empty($store['email'])) {
+				    $data_staff['email'] = $store['email'];
 				}
-				
-				
-				
+				RC_DB::table('staff_user')->insertGetId($data_staff);
+
 				//审核通过，修改所有日志storeid type
 				RC_DB::table('store_check_log')->where('store_id', $id)->where('type', 1)->update(array('store_id' => $store_id, 'type' => 2));
 				$log = array(
@@ -464,7 +451,21 @@ class admin_preaudit extends ecjia_admin {
 				);
 				RC_Api::api('store', 'add_check_log', $log);
 				ecjia_admin::admin_log($data['merchants_name'].' 通过', 'check', 'merchants_preaudit');
-				return $this->showmessage(RC_Lang::get('store::store.check_success').$message, ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('store/admin_preaudit/init')));
+				
+				//短信发送通知
+				$options = array(
+					'mobile' => $store['contact_mobile'],
+					'event'	 => 'sms_join_merchant',
+					'value'  =>array(
+						'user_name' => $store['responsible_person'],
+						'shop_name' => ecjia::config('shop_name'),
+						'account'	=> $store['contact_mobile'],
+						'password'	=> $password,
+						'service_phone' => ecjia::config('service_phone'),
+					),
+				);
+				$response = RC_Api::api('sms', 'send_event_sms', $options);
+				return $this->showmessage(RC_Lang::get('store::store.check_success'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('store/admin_preaudit/init')));
 			} else {
 				//再次审核资料
 				$store = RC_DB::table('store_preaudit')->where('store_id', $store_id)->first();
@@ -474,7 +475,7 @@ class admin_preaudit extends ecjia_admin {
 				if ($count > 0) {
 				    return $this->showmessage('店铺名称已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
-				$data =array(
+				$data = array(
 				    'merchants_name'            => $store['merchants_name'],
 					'cat_id' 					=> $store['cat_id'],
 // 				    'identity_status'           => intval($_POST['identity_status']),
@@ -508,28 +509,17 @@ class admin_preaudit extends ecjia_admin {
 				if ($is_exist) {
 				    return $this->showmessage('联系手机员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
-				$is_exist = RC_DB::table('store_franchisee')->where('store_id', '<>', $store_id)->where('email', $data['email'])->get();
-				if ($is_exist) {
-				    return $this->showmessage('邮箱已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+				if (!empty($data['email'])) {
+				    $is_exist = RC_DB::table('store_franchisee')->where('store_id', '<>', $store_id)->where('email', $data['email'])->get();
+    				if ($is_exist) {
+    				    return $this->showmessage('邮箱已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
+    				$is_exist = RC_DB::table('staff_user')->where('store_id', '<>', $store_id)->where('email', $data['email'])->get();
+    				if ($is_exist) {
+    				    return $this->showmessage('邮箱员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    				}
 				}
-				$is_exist = RC_DB::table('staff_user')->where('store_id', '<>', $store_id)->where('email', $data['email'])->get();
-				if ($is_exist) {
-				    return $this->showmessage('邮箱员工中已存在，请修改', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-				}
-				//判断图片是否更新，删除老图
-				/* $disk = RC_Filesystem::disk();
-				if ($store['identity_pic_front'] && $store['identity_pic_front'] != $franchisee_info['identity_pic_front']) {
-				    $disk->delete(RC_Upload::upload_path($franchisee_info['identity_pic_front']));
-				}
-				if ($store['identity_pic_back'] && $store['identity_pic_back'] != $franchisee_info['identity_pic_back']) {
-				    $disk->delete(RC_Upload::upload_path($franchisee_info['identity_pic_back']));
-				}
-				if ($store['personhand_identity_pic'] && $store['personhand_identity_pic'] != $franchisee_info['personhand_identity_pic']) {
-				    $disk->delete(RC_Upload::upload_path($franchisee_info['personhand_identity_pic']));
-				}
-				if ($store['business_licence_pic'] && $store['business_licence_pic'] != $franchisee_info['business_licence_pic']) {
-				    $disk->delete(RC_Upload::upload_path($franchisee_info['business_licence_pic']));
-				} */
+
 				//判断是否修改认证相关字段
 				if (
 				    ($store['identity_pic_front'] && $store['identity_pic_front'] != $franchisee_info['identity_pic_front']) ||
@@ -605,6 +595,8 @@ class admin_preaudit extends ecjia_admin {
 	    if (empty($info)) {
 	        return $this->showmessage('信息不存在或已处理完成', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR,  array('pjaxurl' => RC_Uri::url('store/admin_preaudit/init')));
 	    }
+	    $this->assign('merchants_name', $info['merchants_name']);
+
 	    $log_store_id = $info['store_id'] ? $info['store_id'] : $info['id'];
 	    $log_type     = $info['store_id'] ? 2 : 1;
 
@@ -620,11 +612,15 @@ class admin_preaudit extends ecjia_admin {
 
 		$filter['keywords'] = empty($_GET['keywords']) ? ''     : trim($_GET['keywords']);
 		$filter['type']     = empty($_GET['type'])     ? 'join' : trim($_GET['type']);
+		$filter['cat_id']     = empty($_GET['cat_id']) ? '' : trim($_GET['cat_id']);
 		if ($filter['keywords']) {
 			$db_store_franchisee->where(function ($query) use ( $filter) {
 			    $query->where('merchants_name', 'like', '%'.mysql_like_quote($filter['keywords']).'%')
 			    ->orWhere('contact_mobile', 'like', '%'.mysql_like_quote($filter['keywords']).'%');
 			});
+		}
+		if ($filter['cat_id']) {
+		    $db_store_franchisee->where(RC_DB::raw('sp.cat_id'), $filter['cat_id']);
 		}
 
 		$filter_type = $db_store_franchisee
@@ -686,19 +682,6 @@ class admin_preaudit extends ecjia_admin {
 		return $cat_list;
 	}
 
-
-	/**
-	 * 获取指定地区的子级地区
-	 */
-	public function get_region(){
-		$type           = !empty($_GET['type'])   ? intval($_GET['type'])               : 0;
-		$parent         = !empty($_GET['parent']) ? intval($_GET['parent'])             : 0;
-		$arr['regions'] = $this->db_region->get_regions($type, $parent);
-		$arr['type']    = $type;
-		$arr['target']  = !empty($_GET['target']) ? stripslashes(trim($_GET['target'])) : '';
-		$arr['target']  = htmlspecialchars($arr['target']);
-		echo json_encode($arr);
-	}
 }
 
 //end

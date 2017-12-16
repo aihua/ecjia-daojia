@@ -88,7 +88,7 @@ class admin_group extends ecjia_admin {
 		$this->assign('city_list', $city_list);
 		
 		//获取当前城市ID
-		$city_id = $citymanage->getCurrentCity(intval($_GET['city_id']));
+		$city_id = $citymanage->getCurrentCity(trim($_GET['city_id']));
 		$this->assign('city_id', $city_id);
 		
 		//获取广告组列表
@@ -126,9 +126,9 @@ class admin_group extends ecjia_admin {
 		$position_code = !empty($_POST['position_code']) ? trim($_POST['position_code']) : '';
 		$position_desc = !empty($_POST['position_desc']) ? nl2br(htmlspecialchars($_POST['position_desc'])) : '';
 		$sort_order    = !empty($_POST['sort_order']) ? intval($_POST['sort_order']) : 0;
-		$city_id       = !empty($_POST['city_id']) ? intval($_POST['city_id']) : 0;
-		$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-		if(!$city_name){
+		$city_id       = !empty($_POST['city_id']) ? trim($_POST['city_id']) : '';
+		$city_name     = ecjia_region::getRegionName($city_id);
+		if (!$city_name) {
 			$city_name = '默认';
 		}
 		$query = RC_DB::table('ad_position')->where('position_code', $position_code)->where('city_id', $city_id)->where('type', 'group')->count();
@@ -182,9 +182,9 @@ class admin_group extends ecjia_admin {
 		$position_desc = !empty($_POST['position_desc']) ? nl2br(htmlspecialchars($_POST['position_desc'])) : '';
 		$sort_order    = !empty($_POST['sort_order']) ? intval($_POST['sort_order']) : 0;
 		
-		$city_id       = intval($_POST['city_id']);
-		$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-		if(!$city_name){
+		$city_id       = trim($_POST['city_id']);
+		$city_name     = ecjia_region::getRegionName($city_id);
+		if (!$city_name) {
 			$city_name = '默认';
 		}
 		$position_id   = intval($_POST['position_id']);
@@ -215,9 +215,9 @@ class admin_group extends ecjia_admin {
 		$position_desc = $_GET['position_desc'];
 		$sort_order    = intval($_GET['sort_order']);
 		
-		$city_id = intval($_GET['city_id']);
-		$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-		if(!$city_name){
+		$city_id = trim($_GET['city_id']);
+		$city_name     = ecjia_region::getRegionName($city_id);
+		if (!$city_name) {
 			$city_name = '默认';
 		}
 		$query = RC_DB::table('ad_position')->where('position_code', $position_code)->where('city_id', $city_id)->where('type', 'group')->count();
@@ -246,12 +246,12 @@ class admin_group extends ecjia_admin {
 	public function remove() {
 		$this->admin_priv('ad_group_delete');
 		$group_position_id = intval($_GET['group_position_id']);
-		$city_id = intval($_GET['city_id']);
+		$city_id = trim($_GET['city_id']);
 
 		if (RC_DB::table('ad_position')->where('group_id', $group_position_id)->count() > 0) {
-			if($_GET['key']) {
+			if ($_GET['key']) {
 				return $this->showmessage('该广告组已进行广告位编排，不能删除！', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR,array('pjaxurl' => RC_Uri::url('adsense/admin_group/constitute',array('city_id' => $city_id, 'position_id' => $group_position_id))));
-			}else{
+			} else {
 				return $this->showmessage('该广告组已进行广告位编排，不能删除！', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR,array('pjaxurl' => RC_Uri::url('adsense/admin_group/group_position_list',array('city_id' => $city_id, 'position_id' => $group_position_id))));
 			}
 		} else {
@@ -268,7 +268,7 @@ class admin_group extends ecjia_admin {
 		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('组合广告组'));
 		$this->assign('ur_here', '组合广告组');
 
-		$city_id = intval($_GET['city_id']);
+		$city_id = trim($_GET['city_id']);
 		$this->assign('city_id', $city_id);
 		
 		$this->assign('action_link', array('href' => RC_Uri::url('adsense/admin_group/init',array('city_id' => $city_id)), 'text' => '广告组'));
@@ -308,7 +308,7 @@ class admin_group extends ecjia_admin {
 	public function constitute_insert() {
 		$this->admin_priv('ad_group_update');
 		
-		$city_id = intval($_GET['city_id']);
+		$city_id = trim($_GET['city_id']);
 		
 		$group_position_id	= intval($_GET['position_id']);//广告组id
 		$position_name = RC_DB::TABLE('ad_position')->where('position_id', $group_position_id)->pluck('position_name');
@@ -346,7 +346,7 @@ class admin_group extends ecjia_admin {
 		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('组合列表'));
 		$this->assign('ur_here', '组合列表');
 		
-		$city_id = intval($_GET['city_id']);
+		$city_id = trim($_GET['city_id']);
 		$this->assign('city_id', $city_id);
 		
 		$group_position_id = intval($_GET['position_id']);
@@ -375,8 +375,7 @@ class admin_group extends ecjia_admin {
 	 * 获取热门城市
 	 */
 	private function get_select_city() {
-		$data = explode(',', ecjia::config('mobile_recommend_city'));
-		$data = RC_DB::table('region')->whereIn('region_id', $data)->get();
+		$data = ecjia_region::getRegions(explode(',', ecjia::config('mobile_recommend_city')));
 		$regions = array ();
 		if (!empty($data)) {
 			foreach ($data as $row) {

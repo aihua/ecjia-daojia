@@ -93,7 +93,7 @@ return array(
 		'shop_website' 		=> '商店网址',
 		'shop_desc' 		=> '商店描述',
 		'shop_keywords' 	=> '商店关键字',
-		'shop_country' 		=> '所在国家',
+		'shop_country' 		=> '指定运营国家',
 		'shop_province' 	=> '所在省份',
 		'shop_city' 		=> '所在城市',
 		'shop_address' 		=> '详细地址',
@@ -176,7 +176,7 @@ return array(
 		'show_goods_in_cart' 	=> '购物车里显示商品方式',
 		'show_attr_in_cart' 	=> '购物车里是否显示商品属性',
 		'email_content'  		=> '您好！这是一封检测邮件服务器设置的测试邮件。收到此邮件，意味着您的邮件服务器设置正确！您可以进行其它邮件发送的操作了！',
-		'sms' 					=> '短信设置',
+		'sms' 					=> '短信通知',
 		'sms_shop_mobile' 		=> '商家的手机号码',
 		'sms_order_placed' 		=> '客户下订单时是否给商家发短信',
 		'sms_order_payed' 		=> '客户付款时是否给商家发短信',
@@ -185,7 +185,6 @@ return array(
 		'top10_time' 			=> '排行统计的时间',
 		'goods_gallery_number' 	=> '商品详情页相册图片数量',
 		'article_title_length' 	=> '文章标题的长度',
-		'cron_method' 			=> '是否开启命令行调用计划任务',
 		'timezone' 				=> '默认时区',
 		'upload_size_limit' 	=> '附件上传大小',
 		'search_keywords' 		=> '首页搜索的关键字',
@@ -218,8 +217,6 @@ return array(
 		'wap_config' 		=> '是否使用H5应用功能',
 		'map_qq_referer'    => '腾讯地图应用名称',
 		'map_qq_key'        => '腾讯地图KEY',
-		'map_baidu_referer' => '百度地图应用名称',
-		'map_baidu_key'     => '百度地图KEY',
 		'wap_logo' 			=> 'H5 LOGO上传',
 	    'mobile_touch_qrcode' => 'H5 访问二维码',
 	    'mobile_touch_url'    => 'H5 商城URL',
@@ -281,7 +278,6 @@ return array(
 		//与底部语言合并
 		'wap_config'     	=> '此功能不仅可以在APP中内嵌使用，还可以在微信公众号中作为微信商城使用。',
 		'map_qq_key'     	=> '使用QQ账号，进行<a target="_blank" href="http://lbs.qq.com/key.html">开发密钥申请</a>，填写应用名及应用描述即可申请。一个账号可以申请多个key。',
-		'map_baidu_key'     => '使用百度账号，进行<a target="_blank" href="http://lbsyun.baidu.com/apiconsole/key?application=key">开发密钥申请</a>，填写应用名及相应的配置项即可申请。',
 		'recommend_order'	=> '推荐排序适合少量推荐，随机显示大量推荐',
 		'wap_logo'			=> '适用于收藏夹图标，为了更好地兼容各种手机类型，LOGO 最好为png图片',//追加
 		'mail_service'		=> '如果您选择了采用服务器内置的 Mail 服务，您不需要填写下面的内容。',
@@ -524,10 +520,6 @@ return array(
 		'sms_order_shipped' => array(
 			'0' => '不发短信',
 			'1' => '发短信',
-		),
-		'cron_method' => array(
-			'0' => '否',
-			'1' => '是',
 		),
 		'enable_order_check' => array(
 			'0' => '否',

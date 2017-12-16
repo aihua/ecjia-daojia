@@ -601,7 +601,7 @@ function update_user_info() {
 				$row['user_rank'] = 0;
 			}
 		}
-
+	
 		/* 取得用户等级和折扣 */
 		if ($row['user_rank'] == 0) {
 			// 非特殊等级，根据等级积分计算用户等级（注意：不包括特殊等级）
@@ -623,6 +623,9 @@ function update_user_info() {
 				$_SESSION['user_rank'] = 0;
 				$_SESSION['discount']  = 1;
 			}
+		}
+		if (empty($_SESSION['user_rank'])) {
+			$_SESSION['user_rank'] = 0;
 		}
 	}
 
@@ -669,41 +672,73 @@ function update_address($address) {
 	return true;
 }
 
-function EM_user_info($user_id) {
+function EM_user_info($user_id, $mobile) {
 	$db_collect_goods  = RC_Model::model('goods/collect_goods_model');
 	$db_user_rank      = RC_Model::model('user/user_rank_model');
 	$db_orderinfo_view = RC_Model::model('orders/order_info_viewmodel');
-	$db_orderinfo_view->view = array(
-	    'order_goods' => array(
-	        'type'      =>    Component_Model_View::TYPE_LEFT_JOIN,
-	        'alias'     =>    'og',
-	        'on'        =>    'oi.order_id = og.order_id ',
-	    ),
-	    'goods' => array(
-	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
-	        'alias'     => 'g',
-	        'on'        => 'og.goods_id = g.goods_id'
-	    ),
-	    'store_franchisee' => array(
-	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
-	        'alias'     => 'ssi',
-	        'on'        => 'oi.store_id = ssi.store_id'
-	    ),
-	    'comment' => array(
-	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
-	        'alias'     => 'c',
-	        'on'        => 'c.id_value = og.goods_id and c.rec_id = og.rec_id and c.order_id = oi.order_id and c.comment_type = 0 and c.parent_id = 0'
-	    ),
-	);
+// 	$db_orderinfo_view->view = array(
+// 	    'order_goods' => array(
+// 	        'type'      =>    Component_Model_View::TYPE_LEFT_JOIN,
+// 	        'alias'     =>    'og',
+// 	        'on'        =>    'oi.order_id = og.order_id ',
+// 	    ),
+// 	    'goods' => array(
+// 	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
+// 	        'alias'     => 'g',
+// 	        'on'        => 'og.goods_id = g.goods_id'
+// 	    ),
+// 	    'store_franchisee' => array(
+// 	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
+// 	        'alias'     => 'ssi',
+// 	        'on'        => 'oi.store_id = ssi.store_id'
+// 	    ),
+// 	    'comment' => array(
+// 	        'type'      => Component_Model_View::TYPE_LEFT_JOIN,
+// 	        'alias'     => 'c',
+// 	        'on'        => 'c.id_value = og.goods_id and c.rec_id = og.rec_id and c.order_id = oi.order_id and c.comment_type = 0 and c.parent_id = 0'
+// 	    ),
+// 	);
 	
 	RC_Loader::load_app_func('admin_order', 'orders');
-	$user_info      = user_info($user_id);
-	$collection_num = $db_collect_goods->where(array('user_id' => $user_id))->order(array('add_time' => 'desc'))->count();
-	$await_pay      = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('await_pay', 'oi.')))->count('*');
-	$await_ship     = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('await_ship', 'oi.')))->count('*');
-	$shipped        = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('shipped', 'oi.')))->count('*');
-	$finished       = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('finished', 'oi.')))->count('*');
-	$allow_comment_count = $db_orderinfo_view->join(array('order_goods', 'goods', 'comment'))->where(array('oi.user_id' => $user_id, 'oi.shipping_status' => SS_RECEIVED, 'oi.order_status' => array(OS_CONFIRMED, OS_SPLITED), 'oi.pay_status' => array(PS_PAYED, PS_PAYING), 'c.comment_id is null'))->count('DISTINCT oi.order_id');
+	$user_info      = user_info($user_id, $mobile);
+	
+	if (is_ecjia_error($user_info)) {
+		return $user_info;
+	}
+	//$collection_num = $db_collect_goods->where(array('user_id' => $user_id))->order(array('add_time' => 'desc'))->count();
+	//$await_pay      = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('await_pay', 'oi.')))->count('*');
+	//$await_ship     = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('await_ship', 'oi.')))->count('*');
+	//$shipped        = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('shipped', 'oi.')))->count('*');
+	//$finished       = $db_orderinfo_view->join(array('order_info'))->where(array('oi.user_id' => $user_id, EM_order_query_sql('finished', 'oi.')))->count('*');
+	//$allow_comment_count = $db_orderinfo_view->join(array('order_goods', 'goods', 'comment'))->where(array('oi.user_id' => $user_id, 'oi.shipping_status' => SS_RECEIVED, 'oi.order_status' => array(OS_CONFIRMED, OS_SPLITED), 'oi.pay_status' => array(PS_PAYED, PS_PAYING), 'c.comment_id is null'))->count('DISTINCT oi.order_id');
+	
+	$collection_num = RC_DB::table('collect_goods')->where('user_id', $user_id)->orderBy('add_time', 'desc')->count();
+	$await_pay = RC_DB::table('order_info')->where('user_id', $user_id)->whereRaw(EM_order_query_sql('await_pay', ''))->count();
+	$await_ship = RC_DB::table('order_info')->where('user_id', $user_id)->whereRaw(EM_order_query_sql('await_ship', ''))->count();
+	$shipped =  RC_DB::table('order_info')->where('user_id', $user_id)->whereRaw(EM_order_query_sql('shipped', ''))->count();
+	$finished = RC_DB::table('order_info')->where('user_id', $user_id)->whereRaw(EM_order_query_sql('finished', 'oi.'))-count();
+	
+	$db_allow_comment = RC_DB::table('order_info as oi')
+	->leftJoin('order_goods as og', RC_DB::raw('oi.order_id'), '=', RC_DB::raw('og.order_id'))
+	->leftJoin('goods as g', RC_DB::raw('g.goods_id'), '=', RC_DB::raw('og.goods_id'))
+	->leftJoin('comment as c', function ($join) {
+		$join->on(RC_DB::raw('c.id_value'), '=', RC_DB::raw('og.goods_id'))
+		->on(RC_DB::raw('og.rec_id'), '=', RC_DB::raw('c.rec_id'))
+		->on(RC_DB::raw('c.order_id'), '=', RC_DB::raw('oi.order_id'))
+		->where(RC_DB::raw('c.parent_id'), '=', 0)
+		->where(RC_DB::raw('c.comment_type'), '=',0);
+	});
+	
+	$allow_comment_count = $db_allow_comment
+	->where(RC_DB::raw('oi.user_id'), $user_id)
+	->where(RC_DB::raw('oi.shipping_status'), SS_RECEIVED)
+	->whereIn(RC_DB::raw('oi.order_status'), array(OS_CONFIRMED, OS_SPLITED))
+	->whereIn(RC_DB::raw('oi.pay_status'), array(PS_PAYED, PS_PAYING))
+	->whereRaw(RC_DB::raw('c.comment_id is null'))
+	->select(RC_DB::Raw('count(DISTINCT oi.order_id) as counts'))->get();
+	$allow_comment_count = $allow_comment_count['0']['counts'];
+	
+	
 	/* 取得用户等级 */
 	if ($user_info['user_rank'] == 0) {
 		// 非特殊等级，根据等级积分计算用户等级（注意：不包括特殊等级）
@@ -743,6 +778,10 @@ function EM_user_info($user_id) {
 	
 	/* 判断会员名更改时间*/
 	$username_update_time = RC_Model::model('term_meta_model')->find($data);
+	
+	$address = $user_info['address_id'] > 0 ? RC_DB::table('user_address')->where('address_id', $user_info['address_id'])->first() : '';
+	$user_info['address'] = $user_info['address_id'] > 0 ? ecjia_region::getRegionName($address['city']).ecjia_region::getRegionName($address['district']).ecjia_region::getRegionName($address['street']).$address['address'] : '';
+	
 	return array(
 		'id'				=> $user_info['user_id'],
 		'name'				=> $user_info['user_name'],
@@ -752,6 +791,7 @@ function EM_user_info($user_id) {
 		'collection_num' 	=> $collection_num,
 		'email'				=> $user_info['email'],
 		'mobile_phone'		=> $user_info['mobile_phone'],
+		'address'			=> $user_info['address'],
 		'avatar_img'		=> $avatar_img,
 		'order_num' => array(
 			'await_pay' 	=> $await_pay,
@@ -760,9 +800,11 @@ function EM_user_info($user_id) {
 			'finished' 		=> $finished,
 		    'allow_comment'	=> $allow_comment_count,
 		),
+		'user_money'		=> $user_info['user_money'],
 		'formated_user_money' 	=> price_format($user_info['user_money'], false),
 		'user_points' 			=> $user_info['pay_points'],
 		'user_bonus_count' 		=> $bonus_count,
+		'reg_time'				=> empty($user_info['reg_time']) ? '' : RC_Time::local_date(ecjia::config('time_format'), $user_info['reg_time']),
 		'update_username_time'	=> empty($username_update_time) ? '' : RC_Time::local_date(ecjia::config('time_format'), $username_update_time['meta_value'])
 	);
 }

@@ -48,7 +48,7 @@ $.localStorage('address_url', "{RC_Uri::url('touch/my/init')}");
 						<p class="ecjiaf-fl ecjia-mw6">{$value.consignee}</p>
 						<p class="ecjiaf-fl ecjia-margin-l ecjia-address-mobile">{$value.mobile}</p>
 					</div>
-					<div class="address ecjiaf-wwb">{$value.province_name} {$value.city_name} {$value.address} {$value.address_info}</div>
+					<div class="address ecjiaf-wwb">{$value.province_name}{$value.city_name}{$value.district_name}{$value.street_name} {$value.address} {$value.address_info}</div>
 				</a>
 				<hr />
 				<!-- {if $value.default_address eq 1} -->
@@ -74,7 +74,7 @@ $.localStorage('address_url', "{RC_Uri::url('touch/my/init')}");
 						<p class="ecjiaf-fl ecjia-mw6">{$value.consignee}</p>
 						<p class="ecjiaf-fl ecjia-margin-l ecjia-address-mobile">{$value.mobile}</p>
 					</div>
-					<div class="address ecjiaf-wwb">{$value.province_name} {$value.city_name} {$value.address} {$value.address_info}</div>
+					<div class="address ecjiaf-wwb">{$value.province_name}{$value.city_name}{$value.district_name}{$value.street_name} {$value.address} {$value.address_info}</div>
 				</a>
 				<hr />
 				<!-- {if $value.default_address eq 1} -->
@@ -99,7 +99,7 @@ $.localStorage('address_url', "{RC_Uri::url('touch/my/init')}");
 					<p class="ecjiaf-fl ecjia-mw6">{$value.consignee}</p>
 					<p class="ecjiaf-fl ecjia-margin-l ecjia-address-mobile">{$value.mobile}</p>
 				</div>
-				<div class="address ecjiaf-wwb">{$value.province_name} {$value.city_name} {$value.address} {$value.address_info}</div>
+				<div class="address ecjiaf-wwb">{$value.province_name}{$value.city_name}{$value.district_name}{$value.street_name} {$value.address} {$value.address_info}</div>
 				<hr />
 				<!-- {if $value.default_address eq 1} -->
 				<p class="ecjiaf-fl"><i class="icon-is-default"></i>&nbsp;&nbsp;{t}设为默认{/t}</p>
@@ -117,7 +117,7 @@ $.localStorage('address_url', "{RC_Uri::url('touch/my/init')}");
 		<!-- {else} -->
 		<div class="ecjia-margin-t">
 			<div class="ecjia-nolist">
-				<p><img src="{$theme_url}images/no_address.png"></p>
+				<p><img src="{$theme_url}images/wallet/null280.png"></p>
 				暂无收货地址，请添加
 			</div>
 		</div>

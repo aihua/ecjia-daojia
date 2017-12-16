@@ -54,6 +54,7 @@ class admin_config extends ecjia_admin {
 		RC_Loader::load_app_func('global');
 		assign_adminlog_content();
 	
+		RC_Loader::load_app_func('merchant_store_category', 'store');
 		RC_Script::enqueue_script('jquery-validate');
 		RC_Script::enqueue_script('jquery-form');
 		RC_Script::enqueue_script('smoke');
@@ -65,6 +66,7 @@ class admin_config extends ecjia_admin {
 		RC_Script::enqueue_script('bootstrap-placeholder');
 		
 		RC_Script::enqueue_script('admin_config', RC_App::apps_url('statics/js/admin_config.js', __FILE__), array(), false, true);
+		RC_Script::localize_script('admin_config', 'js_lang', RC_Lang::get('mobile::mobile.js_lang'));
 	}
 					
 	/**
@@ -87,6 +89,52 @@ class admin_config extends ecjia_admin {
     	$this->assign('mobile_location_range', ecjia::config('mobile_location_range'));
     	$this->assign('current_code', 'store');
 		$this->assign('form_action', RC_Uri::url('store/admin_config/update'));
+		
+		$store_model = ecjia::config('store_model');
+		$store_list = array();
+		
+		if ($store_model == 'nearby' || empty($store_model)) {
+			$store_model = 0;
+		} else if (!empty($store_model)) {
+			$store_id = $store_model;
+			$store_model = explode(',', $store_model);
+			if (count($store_model) == 1) {
+				$store_list = RC_DB::table('store_franchisee')->select('store_id', 'merchants_name')->where('store_id', $store_id)->first();
+				$store_model = 1;
+			} else {
+				$store_list = RC_DB::table('store_franchisee')->select('store_id', 'merchants_name')->whereIn('store_id', $store_model)->get();
+				$store_model = 2;
+			}
+		}
+		
+		$this->assign('model', $store_model);
+		$this->assign('store_list', $store_list);
+		$this->assign('cat_list', cat_list(0, 0, true));
+		
+		//是否关闭入驻商加盟
+		$info = RC_DB::table('shop_config')->where('code', 'merchant_join_close')->first();
+		
+		$merchant_join_close = ecjia::config('merchant_join_close');
+		$this->assign('merchant_join_close', $merchant_join_close);
+
+		/*热门城市*/
+		$regions = array ();
+		$mobile_recommend_city = explode(',', ecjia::config('mobile_recommend_city'));
+		$region_data           = ecjia_region::getRegions($mobile_recommend_city);
+		if (!empty($region_data)) {
+			foreach ( $region_data as $key => $val ) {
+				if ( empty($val['region_name']) ) {
+					$regions[$val['region_id']] = '<lable  style="color:red">' .RC_Lang::get('mobile::mobile.region_removed'). '</lable>';
+				} else {
+					$regions[$val['region_id']] = $val['region_name'];
+				}
+			}
+		}
+		$this->assign('mobile_recommend_city', $regions);
+
+		$provinces = ecjia_region::getSubarea(ecjia::config('shop_country'));//获取当前国家的所有省份
+		$this->assign('provinces', $provinces);
+		
 		$this->display('store_config_info.dwt');
 	}
 		
@@ -99,6 +147,31 @@ class admin_config extends ecjia_admin {
 		$merchant_admin_cpname 	= !empty($_POST['merchant_admin_cpname']) 	? trim($_POST['merchant_admin_cpname']) : '';
 		
 		$mobile_location_range  = isset($_POST['mobile_location_range']) ? intval($_POST['mobile_location_range']) : 0;
+
+		$store_model = !empty($_POST['store_model']) ? intval($_POST['store_model']) : 0;
+		
+		$merchant_join_close = !empty($_POST['merchant_join_close']) ? intval($_POST['merchant_join_close']) : 0;
+		//附近门店
+		if ($store_model == 0) {
+			$store_model = 'nearby';
+		//单门店
+		} elseif ($store_model == 1) {
+			$store_id = !empty($_POST['store']) ? intval($_POST['store']) : 0;
+			if (empty($store_id)) {
+				$this->showmessage('请搜索后选择店铺', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+			}	
+			$store_model = $store_id;
+		//多门店
+		} elseif ($store_model == 2) {
+			$store_id = !empty($_POST['store_id']) ? $_POST['store_id'] : '';
+			if (empty($store_id)) {
+				$this->showmessage('请搜索后选择店铺', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+			}
+			if (count($store_id) < 2) {
+				$this->showmessage('请至少选择两个店铺', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+			}
+			$store_model = implode(',', $store_id);
+		}
 		
 		//后台名称
 		ecjia_config::instance()->write_config('merchant_admin_cpname', $merchant_admin_cpname);
@@ -120,8 +193,26 @@ class admin_config extends ecjia_admin {
 			ecjia_config::instance()->write_config('merchant_admin_login_logo', $logo);
 		}
 		
+		//门店模式
+		ecjia_config::instance()->write_config('store_model', $store_model);
+		
+		//是否关闭入驻商加盟
+		ecjia_config::instance()->write_config('merchant_join_close', $merchant_join_close);
+		
+		/*热门城市处理*/
+		$regions 						= isset($_POST['regions']) 						? $_POST['regions'] 							: '';
+		$mobile_recommend_city = '';
+		if (!empty($regions)) {
+			foreach ($regions as $val) {
+				$mobile_recommend_city .= $val.',';
+			}
+			$mobile_recommend_city = substr($mobile_recommend_city, 0, -1);
+		}
+		ecjia_config::instance()->write_config('mobile_recommend_city', $mobile_recommend_city);
+		
+		
 		ecjia_admin::admin_log('商家入驻>后台设置', 'setup', 'config');
-		return $this->showmessage(__('更新后台设置成功！'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('store/admin_config/init')));
+		return $this->showmessage(__('更新商店设置成功！'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('store/admin_config/init')));
 	}
 	
 	/**
@@ -139,6 +230,25 @@ class admin_config extends ecjia_admin {
 			}
 		}
 		return $this->showmessage(__('删除图片成功！'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('store/admin_config/init')));
+	}
+	
+	/**
+	 * 搜索店铺
+	 */
+	public function search_store() {
+		$cat_id = !empty($_POST['cat_id']) ? intval($_POST['cat_id']) : 0;
+		$keywords = !empty($_POST['keywords']) ? trim($_POST['keywords']) : '';
+
+		$db_store_franchisee = RC_DB::table('store_franchisee');
+		if (!empty($cat_id)) {
+			$db_store_franchisee->where('cat_id', $cat_id);
+		}
+		if (!empty($keywords)) {
+			$db_store_franchisee->where('merchants_name', 'like', '%'.mysql_like_quote($keywords).'%');
+		}
+		$data = $db_store_franchisee->select('store_id', 'merchants_name')->where('shop_close', 0)->where('status', 1)->get();
+		
+		return $this->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('content' => $data));
 	}
 }
 

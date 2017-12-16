@@ -60,17 +60,30 @@ class mobile extends ecjia_front {
 		
 		$invite_code = isset($_GET['invite_code']) ? trim($_GET['invite_code']) : '';
 		$urlscheme = ecjia::config('mobile_shop_urlscheme');
-		if(preg_match('/ECJiaBrowse/', $_SERVER['HTTP_USER_AGENT'])) {
+		if (preg_match('/ECJiaBrowse/', $_SERVER['HTTP_USER_AGENT'])) {
 			header("location: ".$urlscheme."app?open_type=signup&invite_code=".$invite_code);
 			exit();
 		}
 		$affiliate_note = "请输入您的电话并下载移动商城应用程序";
 		
+		
+		/*是否有设置下载地址*/
+		if (stripos($_SERVER['HTTP_USER_AGENT'], "iPhone")) {
+			$url = ecjia::config('mobile_iphone_download');
+		} elseif (stripos($_SERVER['HTTP_USER_AGENT'], "Android")) {
+			$url = ecjia::config('mobile_android_download');
+		}
+		
+		if (empty($url)) {
+			$this->assign('is_h5', 1);
+			$affiliate_note = "请输入您的电话并立即注册";
+		}
+		
 		/* 推荐处理 */
 		$affiliate = unserialize(ecjia::config('affiliate'));
 		if (isset($affiliate['on']) && $affiliate['on'] == 1 && $affiliate['intviee_reward']['intivee_reward_value'] > 0) {
 			if ($affiliate['intviee_reward']['intivee_reward_type'] == 'bonus') {
-				$reward_value = RC_Model::model('affiliate/affiliate_bonus_type_model')->where(array('type_id' => $affiliate['intviee_reward']['intivee_reward_value']))->get_field('type_money');
+				$reward_value = RC_DB::table('bonus_type')->where('type_id', $affiliate['intviee_reward']['intivee_reward_value'])->pluck('type_money');
 				$reward_value = price_format($reward_value);
 				$reward_type = '红包';
 			} elseif ($affiliate['intviee_reward']['intivee_reward_type'] == 'integral') {
@@ -87,15 +100,15 @@ class mobile extends ecjia_front {
 				$affiliate_note .= "，完成注册首次下单后，您将获得".$reward_value.$reward_type."奖励";
 			}
 		}
-		$data = array(
-			'object_type'	=> 'ecjia.affiliate',
-			'object_group'	=> 'user_invite_code',
-			'meta_key'		=> 'invite_code',
-			'meta_value'	=> $invite_code
-		);
-		$user_id = RC_Model::model('term_meta_model')->where($data)->get_field('object_id');
+		$user_id = RC_DB::table('term_meta')
+			->where('object_type', 'ecjia.affiliate')
+			->where('object_group', 'user_invite_code')
+			->where('meta_key', 'invite_code')
+			->where('meta_value', $invite_code)
+			->pluck('object_id');
+
 		if (!empty($user_id)) {
-			$user_name = RC_Model::model('affiliate/affiliate_users_model')->where(array('user_id' => $user_id))->get_field('user_name');
+			$user_name = RC_DB::table('users')->where('user_id', $user_id)->pluck('user_name');
 			$note = $user_name."为您推荐[ ".ecjia::config('shop_name')." ]移动商城";
 			$this->assign('note', $note);
 		}
@@ -113,25 +126,22 @@ class mobile extends ecjia_front {
 			$invite_code = isset($_POST['invite_code']) ? trim($_POST['invite_code']) : '';
 			$mobile_phone = isset($_POST['mobile_phone']) ? trim($_POST['mobile_phone']) : '';
 			
-			
-			$count = RC_Model::model('affiliate/affiliate_users_model')->where(array('mobile_phone' => $mobile_phone))->count();
-			
+			$count = RC_DB::table('users')->where('mobile_phone', $mobile_phone)->count();
 			if (!empty($invite_code) && !empty($mobile_phone) && $count <= 0) {
-				$data = array(
-					'object_type'	=> 'ecjia.affiliate',
-					'object_group'	=> 'user_invite_code',
-					'meta_key'		=> 'invite_code',
-					'meta_value'	=> $invite_code,
-				);
-				$invite_id = RC_Model::model('term_meta_model')->where($data)->get_field('object_id');
+				$invite_id = RC_DB::table('term_meta')
+					->where('object_type', 'ecjia.affiliate')
+					->where('object_group', 'user_invite_code')
+					->where('meta_key', 'invite_code')
+					->where('meta_value', $invite_code)
+					->pluck('object_id');
 				
 				if (!empty($invite_id)) {
 					if (!empty($affiliate['config']['expire'])) {
-						if($affiliate['config']['expire_unit'] == 'hour') {
+						if ($affiliate['config']['expire_unit'] == 'hour') {
 							$c = $affiliate['config']['expire'] * 1;
-						} elseif($affiliate['config']['expire_unit'] == 'day') {
+						} elseif ($affiliate['config']['expire_unit'] == 'day') {
 							$c = $affiliate['config']['expire'] * 24;
-						} elseif($affiliate['config']['expire_unit'] == 'week') {
+						} elseif ($affiliate['config']['expire_unit'] == 'week') {
 							$c = $affiliate['config']['expire'] * 24 * 7;
 						} else {
 							$c = 1;
@@ -142,23 +152,22 @@ class mobile extends ecjia_front {
 					$time = RC_Time::gmtime() + $c*3600;
 					
 					/* 判断在有效期内是否已被邀请*/
-					$is_invitee = RC_Model::model('affiliate/invitee_record_model')->where(array(
-						'invitee_phone' => $mobile_phone,
-						'invite_type'	=> 'signup',
-						'expire_time'	=> array('gt' => RC_Time::gmtime())
-					))->find();
+					$is_invitee = RC_DB::table('invitee_record')
+						->where('invitee_phone', $mobile_phone)
+						->where('invite_type', 'signup')
+						->where('expire_time', '>', RC_Time::gmtime())
+						->first();
 					
 					if (empty($is_invitee)) {
-						RC_Model::model('affiliate/invitee_record_model')->insert(array(
-								'invite_id'		=> $invite_id,
-								'invitee_phone' => $mobile_phone,
-								'invite_type'	=> 'signup',
-								'is_registered' => 0,
-								'expire_time'	=> $time,
-								'add_time'		=> RC_Time::gmtime()
+						RC_DB::table('invitee_record')->insert(array(
+							'invite_id'		=> $invite_id,
+							'invitee_phone' => $mobile_phone,
+							'invite_type'	=> 'signup',
+							'is_registered' => 0,
+							'expire_time'	=> $time,
+							'add_time'		=> RC_Time::gmtime()
 						));
 					}
-					
 				}
 			}
 		}
@@ -171,7 +180,11 @@ class mobile extends ecjia_front {
 		
 		$urlscheme = ecjia::config('mobile_shop_urlscheme');
 		$app_url = $urlscheme."app?open_type=signup&invite_code=".$invite_code;
-			
+		
+		if (empty($url)) {
+			$url = RC_Uri::url('user/privilege/register');
+		}
+		
 		if ( $count > 0) {
 			return ecjia_front::$controller->showmessage('该手机号已注册！', ecjia::MSGSTAT_ERROR | ecjia::MSGTYPE_JSON, array('url' => $url, 'app' => $app_url));
 		}

@@ -49,24 +49,36 @@ class merchant_function {
     /*
      * 店铺信息
      */
-    public static function get_merchant_info($store_id) {
+    public static function get_merchant_info($store_id = 0) {
         //店铺基本信息
-        $shop_info = RC_DB::table('store_franchisee as sf')
+        $db_store_franchisee = RC_DB::table('store_franchisee as sf')
         	->leftJoin('merchants_config as mc', RC_DB::raw('sf.store_id'), '=', RC_DB::raw('mc.store_id'))
         	->where(RC_DB::raw('mc.code'), 'shop_notice')
         	->where(RC_DB::raw('sf.store_id'), $store_id)
         	->where(RC_DB::raw('sf.status'), 1)
-        	->selectRaw('sf.manage_mode, sf.address, sf.merchants_name, sf.store_id, sf.shop_close, mc.value, sf.province, sf.city, sf.shop_keyword')
-        	->where(RC_DB::raw('sf.city'), $_COOKIE['city_id'])
-        	->first();
+        	->selectRaw('sf.manage_mode, sf.address, sf.merchants_name, sf.store_id, sf.shop_close, mc.value, sf.province, sf.city, sf.shop_keyword');
+        
+        $length = strlen($_COOKIE['city_id']);
+        if ($length == 4) {
+        	$db_store_franchisee->where(RC_DB::raw('sf.province'), $_COOKIE['city_id']);
+        } elseif ($length == 6) {
+        	$db_store_franchisee->where(RC_DB::raw('sf.city'), $_COOKIE['city_id']);
+        } elseif ($length == 8) {
+        	$db_store_franchisee->where(RC_DB::raw('sf.district'), $_COOKIE['city_id']);
+        } elseif ($length == 11) {
+        	$db_store_franchisee->where(RC_DB::raw('sf.street'), $_COOKIE['city_id']);
+        }
+        $shop_info = $db_store_franchisee->first();
         if (empty($shop_info)) {
         	return array();
         }
-        $db_region          = RC_Model::model('shipping/region_model');
-        $info               = RC_DB::table('store_franchisee')->where('store_id', $store_id)->select('province', 'city', 'address')->first();
-        $province_name      = $db_region->where(array('region_id' => $info['province']))->get_field('region_name');
-        $city_name          = $db_region->where(array('region_id' => $info['city']))->get_field('region_name');
-        $shop_address		= $province_name.' '.$city_name.' '.$info['address'];
+        $info               = RC_DB::table('store_franchisee')->where('store_id', $store_id)->select('province', 'city', 'district', 'street', 'address')->first();
+        $province_name      = ecjia_region::getRegionName($info['province']);
+        $city_name          = ecjia_region::getRegionName($info['city']);
+        $district_name      = ecjia_region::getRegionName($info['district']);
+        $street_name        = ecjia_region::getRegionName($info['street']);
+        
+        $shop_address		= $province_name.$city_name.$district_name.$street_name.' '.$info['address'];
         $outward_info = RC_DB::table('merchants_config')->where('store_id', $store_id)->where(function ($query) {
             	$query->where('code', 'shop_trade_time')
             		->orwhere('code', 'shop_kf_mobile')
@@ -107,17 +119,16 @@ class merchant_function {
         //接单数、接单率
         $amount_info['list_amount'] = RC_DB::table('order_info')->where('store_id', $store_id)->count();
         $amount_info['order_amount'] = RC_DB::table('order_info')->where('store_id', $store_id)->where('order_status', 5)->where('shipping_status', 2)->where('pay_status', 2)->count();
-        $amount_info['order_precent'] = round($amount_info['order_amount'] / $amount_info['list_amount'] * 100, 2);
-
+        $amount_info['order_precent'] = $amount_info['list_amount'] == 0 ? 0 : round($amount_info['order_amount'] / $amount_info['list_amount'] * 100, 2);
         foreach ($outward_info as $key => $val) {
             if ($val['code'] == 'shop_trade_time') {
                 //判断营业时间
                 $outward['trade_time'] = $val['value'];
                 $shop_hours = unserialize($outward['trade_time']);
-                $now_time = time();
+                $now_time = RC_Time::gmtime();
                 if (!empty($shop_hours)) {
-                    $start_time = strtotime($shop_hours['start']);
-                    $end_time = strtotime($shop_hours['end']);
+                    $start_time = RC_Time::local_strtotime($shop_hours['start']);
+                    $end_time = RC_Time::local_strtotime($shop_hours['end']);
                     //0为不营业，1为营业
                     if ($start_time < $now_time && $now_time < $end_time) {
                         $business_status = 1;

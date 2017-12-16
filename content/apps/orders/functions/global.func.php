@@ -191,16 +191,34 @@ function cat_options($spec_cat_id, $arr) {
  */
 function cat_list($cat_id = 0, $selected = 0, $re_type = true, $level = 0, $is_show_all = true) {
     // 加载方法
-    $db_goods = RC_Loader::load_app_model('goods_model', 'orders');
-    $db_category = RC_Loader::load_app_model('sys_category_viewmodel', 'orders');
-    $db_goods_cat = RC_Loader::load_app_model('goods_cat_viewmodel', 'orders');
     static $res = NULL;
     if ($res === NULL) {
         $data = false;
         if ($data === false) {
-            $res = $db_category->join('category')->group('c.cat_id')->order(array('c.parent_id' => 'asc', 'c.sort_order' => 'asc'))->select();
-            $res2 = $db_goods->field('cat_id, COUNT(*)|goods_num')->where(array('is_delete' => 0, 'is_on_sale' => 1))->group('cat_id asc')->select();
-            $res3 = $db_goods_cat->join('goods')->where(array('g.is_delete' => 0, 'g.is_on_sale' => 1))->group('gc.cat_id')->select();
+             $res = RC_DB::table('category as c')
+                ->leftJoin('category as s', RC_DB::raw('c.cat_id'), '=', RC_DB::raw('s.parent_id'))
+                ->selectRaw('c.cat_id, c.cat_name, c.measure_unit, c.parent_id, c.is_show, c.show_in_nav, c.grade, c.sort_order, COUNT(s.cat_id) AS has_children')
+                ->groupBy(RC_DB::raw('c.cat_id'))
+                ->orderBy(RC_DB::raw('c.parent_id'), 'asc')
+                ->orderBy(RC_DB::raw('c.sort_order'), 'asc')
+                ->get();
+                
+            $res2 = RC_DB::table('goods')
+                ->selectRaw('cat_id, COUNT(*) as goods_num')
+                ->where('is_delete', 0)
+                ->where('is_on_sale', 1)
+                ->groupBy('cat_id')
+                ->orderBy('cat_id', 'asc')
+                ->get();
+                
+            $res3 = RC_DB::table('goods_cat as gc')
+                ->leftJoin('goods as g', RC_DB::raw('g.goods_id'), '=', RC_DB::raw('gc.goods_id'))
+                ->where(RC_DB::raw('g.is_delete'), 0)
+                ->where(RC_DB::raw('g.is_on_sale'), 1)
+                ->groupBy(RC_DB::raw('gc.cat_id'))
+                ->get();
+
+
             $newres = array();
             foreach ($res2 as $k => $v) {
                 $newres[$v['cat_id']] = $v['goods_num'];
@@ -923,7 +941,15 @@ function get_site_root_url() {
  * @param 订单id $order_id
  */
 function get_regions($order_id) {
-    $region = RC_DB::table('order_info as o')->leftJoin('region as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))->leftJoin('region as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))->leftJoin('region as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))->leftJoin('region as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'))->select(RC_DB::raw("concat(IFNULL(c.region_name, ''), '  ', IFNULL(p.region_name, ''),'  ', IFNULL(t.region_name, ''), '  ', IFNULL(d.region_name, '')) AS region"))->where(RC_DB::raw('o.order_id'), $order_id)->first();
+    $region = RC_DB::table('order_info as o')
+    	->leftJoin('regions as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))
+    	->leftJoin('regions as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))
+    	->leftJoin('regions as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))
+    	->leftJoin('regions as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'))
+    	->leftJoin('regions as s', RC_DB::raw('o.street'), '=', RC_DB::raw('s.region_id'))
+    	->select(RC_DB::raw("concat(IFNULL(c.region_name, ''), '  ', IFNULL(p.region_name, ''),'  ', IFNULL(t.region_name, ''), '  ', IFNULL(d.region_name, ''), '  ', IFNULL(s.region_name, '')) AS region"))
+    	->where(RC_DB::raw('o.order_id'), $order_id)
+    	->first();
     return $region['region'];
 }
 /**
@@ -1190,9 +1216,9 @@ function merge_order($from_order_sn, $to_order_sn) {
     //删除原来的订单商品
     RC_DB::table('order_goods')->insert($order_goods_list);
     //添加合并后的订单商品
-    $payment_method = RC_Loader::load_app_class('payment_method', 'payment');
-    /* 插入支付日志 */
-    $payment_method->insert_pay_log($order_id, $order['order_amount'], PAY_ORDER);
+//     $payment_method = RC_Loader::load_app_class('payment_method', 'payment');
+//     /* 插入支付日志 */
+//     $payment_method->insert_pay_log($order_id, $order['order_amount'], PAY_ORDER);
     /* 删除原订单 */
     RC_DB::table('order_info')->whereIn('order_id', array($from_order['order_id'], $to_order['order_id']))->delete();
     /* 删除原订单支付日志 */
@@ -1205,6 +1231,55 @@ function merge_order($from_order_sn, $to_order_sn) {
     ecjia_admin::admin_log(sprintf(RC_Lang::get('orders::order.merge_success_notice'), $to_order['order_sn'], $from_order['order_sn'], $order['order_sn']), 'merge', 'order');
     /* 返回成功 */
     return true;
+}
+
+/**
+ * 获取指定年、月、日 开始和结束时间戳
+ * @param number $year
+ * @param number $month
+ * @param number $day
+ * @return array
+ */
+function getTimestamp($year = 0, $month = 0, $day = 0) {
+	if (empty($year)) {
+		$year = RC_Time::local_date("Y");
+	}
+	$start_year = $year;
+	$start_year_formated = str_pad(intval($start_year), 4, "0", STR_PAD_RIGHT);
+	$end_year = $start_year + 1;
+	$end_year_formated = str_pad(intval($end_year), 4, "0", STR_PAD_RIGHT);
+
+	if (empty($month)) {
+		//只设置了年份
+		$start_month_formated = '01';
+		$end_month_formated = '01';
+		$start_day_formated = '01';
+		$end_day_formated = '01';
+	} else {
+		$month > 12 || $month < 1 ? $month = 1 : $month = $month;
+		$start_month = $month;
+		$start_month_formated = sprintf("%02d", intval($start_month));
+		if (empty($day)) {
+			//只设置了年份和月份
+			$end_month = $start_month + 1;
+			if ($end_month > 12) {
+				$end_month = 1;
+			} else {
+				$end_year_formated = $start_year_formated;
+			}
+			$end_month_formated = sprintf("%02d", intval($end_month));
+			$start_day_formated = '01';
+			$end_day_formated = '01';
+		} else {
+			//设置了年份月份和日期
+			$startTimestamp = RC_Time::local_strtotime($start_year_formated.'-'.$start_month_formated.'-'.sprintf("%02d", intval($day))." 00:00:00");
+			$endTimestamp = $startTimestamp + 24 * 3600 - 1;
+			return array('start' => $startTimestamp, 'end' => $endTimestamp);
+		}
+	}
+	$startTimestamp = RC_Time::local_strtotime($start_year_formated.'-'.$start_month_formated.'-'.$start_day_formated." 00:00:00");
+	$endTimestamp = RC_Time::local_strtotime($end_year_formated.'-'.$end_month_formated.'-'.$end_day_formated." 00:00:00") - 1;
+	return array('start' => $startTimestamp, 'end' => $endTimestamp);
 }
 
 //end

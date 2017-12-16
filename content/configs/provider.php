@@ -56,12 +56,18 @@ return array(
     'Royalcms\Component\QrCode\QrCodeServiceProvider',
     'Royalcms\Component\Repository\RepositoryServiceProvider',
     'Royalcms\Component\Sms\SmsServiceProvider',
+    'Royalcms\Component\Omnipay\OmnipayServiceProvider',
     'Royalcms\Component\Alidayu\AlidayuServiceProvider',
     'Royalcms\Component\WeChat\WeChatServiceProvider',
     'Royalcms\Component\WeChat\Menu\MenuServiceProvider',
     'Royalcms\Component\WeChat\User\UserServiceProvider',
+    'Royalcms\Component\WeChat\User\MiniAppUserServiceProvider',
+    'Royalcms\Component\Cron\CronServiceProvider',
+    'Royalcms\Component\Shoppingcart\ShoppingcartServiceProvider',
     
     'Ecjia\System\Providers\SystemServiceProvider',
+    'Ecjia\App\Setting\SettingServiceProvider',
+    'Ecjia\App\Shipping\ShippingServiceProvider',
 );
 
 //end

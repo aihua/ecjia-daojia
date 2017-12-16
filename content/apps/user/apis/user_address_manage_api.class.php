@@ -71,33 +71,36 @@ class user_address_manage_api extends Component_Event_Api {
         }
         
         if (!empty($address['province']) && !empty($address['city']) && !empty($address['address']) && empty($address['location'])) {
-        	$db_region   = RC_Model::model('user/region_model');
-        	$region_name = $db_region->where(array('region_id' => array('in' => array($address['province'], $address['city'], $address['district']))))->order('region_type')->select();
-        	 
-        	$province_name	   = $region_name[0]['region_name'];
-        	$city_name		   = $region_name[1]['region_name'];
-        	$district_name	   = $region_name[2]['region_name'];
+            $province_name = ecjia_region::getRegionName($address['province']);
+            $city_name = ecjia_region::getRegionName($address['city']);
+            $district_name = ecjia_region::getRegionName($address['district']);
+            $street_name = ecjia_region::getRegionName($address['street']);
         	
         	$consignee_address = '';
         	if (!empty($province_name)) {
-        		$consignee_address .= $province_name.'省';
+        		$consignee_address .= $province_name;
         	}
         	if (!empty($city_name)) {
-        		$consignee_address .= $city_name.'市';
+        		$consignee_address .= $city_name;
         	}
+            if (!empty($district_name)) {
+                $consignee_address .= $district_name;
+            }
+            if (!empty($street_name)) {
+                $consignee_address .= $street_name;
+            }
         	$consignee_address .= $address['address'];
 
-        	$shop_point = file_get_contents("https://api.map.baidu.com/geocoder/v2/?address='".$consignee_address."'&output=json&ak=E70324b6f5f4222eb1798c8db58a017b");
+            //腾讯地图api 地址解析（地址转坐标）
+            $consignee_address = urlencode($consignee_address);
+            $key = ecjia::config('map_qq_key');
+            $shop_point = RC_Http::remote_get("https://apis.map.qq.com/ws/geocoder/v1/?address=".$consignee_address."&key=".$key);
+            $shop_point = json_decode($shop_point['body'], true);
+            $location   = (array)$shop_point['result']['location'];
 
-        	$shop_point = json_decode($shop_point);
-        	if (!empty($shop_point->result)) {
-        		$shop_point_result = $shop_point->result;
-        		$location = $shop_point_result->location;
-        
-        		$address['longitude']	= $location->lng;
-        		$address['latitude']	= $location->lat;
-        		unset($address['location']);
-        	}
+            $address['longitude']   = $location['lng'];
+            $address['latitude']    = $location['lat'];
+            unset($address['location']);
         } else {
         	$address['longitude']	= $address['location']['longitude'];
         	$address['latitude']	= $address['location']['latitude'];
@@ -160,6 +163,7 @@ class user_address_manage_api extends Component_Event_Api {
     	    'province'  =>  $address['province'],
     	    'city'      =>  $address['city'],
     	    'district'  =>  $address['district'],
+            'street'    =>  $address['street'],
     	    'address'   =>  $address['address'],
     	    'address_info' =>  $address['address_info'],
     	    'zipcode'   =>  $address['zipcode'],

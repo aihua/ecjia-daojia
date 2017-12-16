@@ -152,8 +152,8 @@ class orders_order_paid_api extends Component_Event_Api {
 	                order_action($order_sn, OS_CONFIRMED, SS_UNSHIPPED, $pay_status, '', RC_Lang::get('orders::order.buyers'));
 	
 	                /* 支付流水记录*/
-	                $db = RC_DB::table('payment_record');
-	                $db->where('order_sn', $order['order_sn'])->where('trade_type', 'buy')->update(array('pay_time' => RC_Time::gmtime(), 'pay_status' => 1));
+// 	                $db = RC_DB::table('payment_record');
+// 	                $db->where('order_sn', $order['order_sn'])->where('trade_type', 'buy')->update(array('pay_time' => RC_Time::gmtime(), 'pay_status' => 1));
 	                
 	                RC_DB::table('order_status_log')->insert(array(
 		                'order_status'	=> RC_Lang::get('orders::order.ps.'.PS_PAYED),
@@ -168,20 +168,73 @@ class orders_order_paid_api extends Component_Event_Api {
 		                'add_time'		=> RC_Time::gmtime(),
 	                ));
 	                
-	                
+	                /*门店自提，时发送提货验证码；*/
+	                if ($order['shipping_id'] > 0) {
+	                	$shipping_info = RC_DB::table('shipping')->where('shipping_id', $order['shipping_id'])->first();
+	                	if ($shipping_info['shipping_code'] == 'ship_cac') {
+	                		/*短信给用户发送收货验证码*/
+	                		if (ecjia::config('sms_shop_mobile') != '') {
+	                			$db_term_meta = RC_DB::table('term_meta');
+	                			$max_code = $db_term_meta->where('object_type', 'ecjia.order')->where('object_group', 'order')->where('meta_key', 'receipt_verification')->max('meta_value');
+	                			 
+	                			$max_code = $max_code ? ceil($max_code/10000) : 1000000;
+	                			$code = $max_code . str_pad(mt_rand(0, 9999), 4, '0', STR_PAD_LEFT);
+	                			 
+	                			$options = array(
+	                					'mobile' => $order['mobile'],
+	                					'event'	 => 'sms_order_pickup',
+	                					'value'  =>array(
+	                							'order_sn'  	=> $order['order_sn'],
+	                							'user_name' 	=> $order['consignee'],
+	                							'code'  		=> $code,
+	                							'service_phone' => ecjia::config('service_phone'),
+	                					),
+	                			);
+	                			RC_Api::api('sms', 'send_event_sms', $options);
+	                			 
+	                			$meta_data = array(
+	                					'object_type'	=> 'ecjia.order',
+	                					'object_group'	=> 'order',
+	                					'object_id'		=> $order_id,
+	                					'meta_key'		=> 'receipt_verification',
+	                					'meta_value'	=> $code,
+	                			);
+	                			$db_term_meta->insert($meta_data);
+	                		}
+	                	}
+	                }
+	           		
 	                /* 客户付款通知（默认通知店长）*/
 	                /* 获取店长的记录*/
-	                $devic_info = $staff_user = array();
+// 	                $devic_info = $staff_user = array();
 	                $staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
+	                
 	                if (!empty($staff_user)) {
-	                	$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_user['user_id']));
+// 	                	$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_user['user_id']));
+
+	                	$options = array(
+	                			'user_id'   => $staff_user['user_id'],
+	                			'user_type' => 'merchant',
+	                			'event'     => 'order_payed',
+	                			'value' => array(
+                					'order_sn'     => $order['order_sn'],
+                					'consignee'    => $order['consignee'],
+                					'telephone'    => $order['mobile'],
+                					'order_amount' => $order['order_amount'],
+                					'service_phone'=> ecjia::config('service_phone'),
+	                			),
+	                			'field' => array(
+	                				'open_type' => 'admin_message',
+	                			),
+	                	);
+	                	RC_Api::api('push', 'push_event_send', $options);
 	                }
 	                
-	                if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-	                	$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_pay', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
+// 	                if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
+// 	                	$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_pay', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
 	                		
-	                	if (!empty($push_event)) {
-	                		/* 通知记录*/
+// 	                	if (!empty($push_event)) {
+// 	                		/* 通知记录*/
 	                		$orm_staff_user_db = RC_Model::model('express/orm_staff_user_model');
 	                		$staff_user_ob = $orm_staff_user_db->find($staff_user['user_id']);
 	                
@@ -203,58 +256,34 @@ class orders_order_paid_api extends Component_Event_Api {
 	                		$push_order_pay = new OrderPay($order_data);
 	                		RC_Notification::send($staff_user_ob, $push_order_pay);
 	                
-	                		RC_Loader::load_app_class('push_send', 'push', false);
-	                		ecjia_admin::$controller->assign('order', $order);
-	                		$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
+// 	                		RC_Loader::load_app_class('push_send', 'push', false);
+// 	                		ecjia_admin::$controller->assign('order', $order);
+// 	                		$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
 	                			
-	                		if ($devic_info['device_client'] == 'android') {
-	                			$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-	                		} elseif ($devic_info['device_client'] == 'iphone') {
-	                			$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-	                		}
-	                	}
-	                }
+// 	                		if ($devic_info['device_client'] == 'android') {
+// 	                			$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 	                		} elseif ($devic_info['device_client'] == 'iphone') {
+// 	                			$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 	                		}
+// 	                	}
+// 	                }
 	                
-	                $result = ecjia_app::validate_application('sms');
-	                if (!is_ecjia_error($result)) {
-	                	$staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
-		                /* 客户付款短信提醒 */
-		                if (ecjia::config('sms_order_payed') == '1' && !empty($staff_user['mobile'])) {
-		                	
-		                	//发送短信
-// 		                	$tpl_name = 'order_payed_sms';
-// 		                	$tpl = RC_Api::api('sms', 'sms_template', $tpl_name);
-// 		                	if (!empty($tpl)) {
-// 			                	ecjia_front::$controller->assign('order_sn',	$order['order_sn']);
-// 			                	ecjia_front::$controller->assign('consignee',	$order['consignee']);
-// 			                	ecjia_front::$controller->assign('mobile',		$order['mobile']);
-// 			                	ecjia_front::$controller->assign('order_amount', $order['order_amount']);
-// 			                	ecjia_front::$controller->assign('order',		$order);
-// 			                	$content = ecjia_front::$controller->fetch_string($tpl['template_content']);
-			                	
-// 			                	$options = array(
-// 		                				'mobile' 		=> $staff_user['mobile'],
-// 		                				'msg'			=> $content,
-// 		                				'template_id' 	=> $tpl['template_id'],
-// 		                		);
-// 		                		$response = RC_Api::api('sms', 'sms_send', $options);
-// 		                	}
-
-		                	$options = array(
-	                			'mobile' => $staff_user['mobile'],
-	                			'event'	 => 'sms_order_payed',
-	                			'value'  =>array(
-	                				'order_sn'  	=> $order['order_sn'],
-                					'consignee' 	=> $order['consignee'],
-                					'telephone'  	=> $order['mobile'],
-                					'order_amount'	=> $order['order_amount'],
-                					'service_phone' => ecjia::config('service_phone'),
-	                			),
-		                	);
-		                	$response = RC_Api::api('sms', 'send_event_sms', $options);
-		                	
-		                	
-		                }
+// 	               $staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
+	                /* 客户付款短信提醒 */
+	                if (!empty($staff_user['mobile'])) {
+	                    //发送短信
+	                	$options = array(
+                			'mobile' => $staff_user['mobile'],
+                			'event'	 => 'sms_order_payed',
+                			'value'  =>array(
+                				'order_sn'  	=> $order['order_sn'],
+            					'consignee' 	=> $order['consignee'],
+            					'telephone'  	=> $order['mobile'],
+            					'order_amount'	=> $order['order_amount'],
+            					'service_phone' => ecjia::config('service_phone'),
+                			),
+	                	);
+	                	RC_Api::api('sms', 'send_event_sms', $options);
 	                }
 
                 } elseif ($pay_log['order_type'] == PAY_SURPLUS) {
@@ -281,9 +310,9 @@ class orders_order_paid_api extends Component_Event_Api {
                         );
                         RC_Api::api('user', 'account_change_log', $options);
                         
-                        /* 支付流水记录*/
-                        $db = RC_DB::table('payment_record');
-                        $db->where('order_sn', $arr['order_sn'])->where('trade_type', 'deposit')->update(array('pay_time' => RC_Time::gmtime(), 'pay_status' => 1));
+//                         /* 支付流水记录*/
+//                         $db = RC_DB::table('payment_record');
+//                         $db->where('order_sn', $arr['order_sn'])->where('trade_type', 'deposit')->update(array('pay_time' => RC_Time::gmtime(), 'pay_status' => 1));
                     }
                 }
             }

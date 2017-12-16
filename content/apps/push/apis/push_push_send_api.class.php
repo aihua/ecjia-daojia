@@ -47,7 +47,7 @@
 defined('IN_ECJIA') or exit('No permission resources.');
 
 /**
- * 发送短信的接口
+ * 发送消息的接口
  * @author royalwang
  */
 class push_push_send_api extends Component_Event_Api {

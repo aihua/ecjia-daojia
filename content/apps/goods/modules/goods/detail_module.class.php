@@ -151,7 +151,17 @@ class detail_module extends api_front implements api_interface {
         $data['properties']      = $properties['pro'];
         $data['specification']   = $properties['spe'];
         $data['collected']       = 0;
-
+		
+        /*如果用户登录，获取该会员的等级对应的商品的shop_price*/
+        if ($_SESSION['user_id'] > 0 && !empty($data['rank_prices'])) {
+        	$user_rank = RC_DB::table('users')->where('user_id', $_SESSION['user_id'])->pluck('user_rank');
+        	foreach ($data['rank_prices'] as $key => $val) {
+        		if ($key == $user_rank) {
+        			$data['shop_price'] = $val['unformatted_price'];
+        		}
+        	}
+        }
+        
         $db_favourable = RC_Model::model('favourable/favourable_activity_model');
        	/*增加优惠活动缓存*/
 		$store_options = array(
@@ -215,7 +225,7 @@ class detail_module extends api_front implements api_interface {
                 $data['collected'] = 1;
             }
         }
-
+		
         $data = API_DATA('GOODS', $data);
         $data['unformatted_shop_price'] = $goods['shop_price'];
         if ($rec_type == 'GROUPBUY_GOODS') {
@@ -419,16 +429,18 @@ function EM_get_goods_gallery($goods_id) {
     /* 格式化相册图片路径 */
     RC_Loader::load_app_class('goods_imageutils', 'goods', false);
     $img_list_sort = $img_list_id = array();
-    foreach ($row as $key => $gallery_img) {
-    	$desc_index = intval(strrpos($gallery_img['img_original'], '?')) + 1;
-    	!empty($desc_index) && $row[$key]['desc'] = substr($gallery_img['img_original'], $desc_index);
-    	$row[$key]['img_url'] = empty($gallery_img ['img_original']) ? RC_Uri::admin_url('statics/images/nopic.png') : goods_imageutils::getAbsoluteUrl($gallery_img ['img_original']);
-    	$row[$key]['thumb_url'] = empty($gallery_img ['img_url']) ? RC_Uri::admin_url('statics/images/nopic.png') : goods_imageutils::getAbsoluteUrl($gallery_img ['img_url']);
-    	$img_list_sort[$key] = $row[$key]['desc'];
-    	$img_list_id[$key] = $gallery_img['img_id'];
+    if (!empty($row)) {
+        foreach ($row as $key => $gallery_img) {
+        	$desc_index = intval(strrpos($gallery_img['img_original'], '?')) + 1;
+        	!empty($desc_index) && $row[$key]['desc'] = substr($gallery_img['img_original'], $desc_index);
+        	$row[$key]['img_url'] = empty($gallery_img ['img_original']) ? RC_Uri::admin_url('statics/images/nopic.png') : goods_imageutils::getAbsoluteUrl($gallery_img ['img_original']);
+        	$row[$key]['thumb_url'] = empty($gallery_img ['img_url']) ? RC_Uri::admin_url('statics/images/nopic.png') : goods_imageutils::getAbsoluteUrl($gallery_img ['img_url']);
+        	$img_list_sort[$key] = $row[$key]['desc'];
+        	$img_list_id[$key] = $gallery_img['img_id'];
+        }
+        //先使用sort排序，再使用id排序。
+        array_multisort($img_list_sort, $img_list_id, $row);
     }
-    //先使用sort排序，再使用id排序。
-    array_multisort($img_list_sort, $img_list_id, $row);
     return $row;
 }
 
@@ -474,18 +486,28 @@ function get_package_goods_list($goods_id) {
     $dbview = RC_Model::model('goods/goods_activity_package_goods_viewmodel');
     $db_view = RC_Model::model('goods/goods_attr_attribute_viewmodel');
     $now = RC_Time::gmtime();
-    $where = array(
-		'ga.start_time' => array('elt' => $now) ,
-		'ga.end_time' => array('egt' => $now) ,
-    	'pg.goods_id' => $goods_id
-    );
-    $res = $dbview
-    	->join('package_goods')
-    	->where($where)
-    	->group('ga.act_id')
-    	->order(array('ga.act_id' => 'asc'))
-    	->select();
+  //   $where = array(
+		// 'ga.start_time' => array('elt' => $now) ,
+		// 'ga.end_time' => array('egt' => $now) ,
+  //   	'pg.goods_id' => $goods_id
+  //   );
+    // $res = $dbview
+    // 	->join('package_goods')
+    // 	->where($where)
+    // 	->group('ga.act_id')
+    // 	->order(array('ga.act_id' => 'asc'))
+    // 	->select();
 
+    $res = array();
+    $data = RC_DB::table('goods_activity')->where('start_time', '<=', $now)->where('end_time', '>=', $now)->groupBy('act_id')->get();
+    if (!empty($data)) {
+        foreach ($data as $k => $v) {
+            if ($v['goods_id'] == $goods_id) {
+                $res[] = $v;
+            }
+        }
+    }
+        
     foreach ($res as $tempkey => $value) {
         $subtotal = 0;
         $row = unserialize($value['ext_info']);

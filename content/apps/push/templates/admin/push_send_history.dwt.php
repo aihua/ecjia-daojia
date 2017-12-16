@@ -11,48 +11,32 @@
 <div>
 	<h3 class="heading">
 		<!-- {if $ur_here}{$ur_here}{/if} -->
-		{if $action_link}
-		<a class="btn plus_or_reply data-pjax" href="{$action_link.href}" id="sticky_a"><i class="fontello-icon-plus"></i>{$action_link.text}</a>
-		{/if}
+		<a class="btn plus_or_reply data-pjax" href="{$action_link_device.href}" id="sticky_a"><i class="fontello-icon-upload"></i>{$action_link_device.text}</a>
 	</h3>
 </div>
 
 <ul class="nav nav-pills">
-<!-- {foreach from=$applistdb.item item=val key=key} -->
-	<li class="{if $listdb.filter.appid eq $val.app_id}active{elseif $key eq 0 and $listdb.filter.appid eq ''}active{/if}"><a class="data-pjax" href='{url path="push/admin/init" args="appid={$val.app_id}"}'>{$val.app_name} <span class="badge badge-info">{$val.count}</span></a></li>
-<!-- {/foreach} -->
+	<li class="{if $listdb.filter.errorval eq '0'}active{/if}"><a class="data-pjax" href='{url path="push/admin/init" args="errorval=0{if $listdb.filter.keywords}&keywords={$listdb.filter.keywords}{/if}"}'>全部<span class="badge badge-info">{$listdb.msg_count.count}</span></a></li>
+	<li class="{if $listdb.filter.errorval eq '1'}active{/if}"><a class="data-pjax" href='{url path="push/admin/init" args="errorval=1{if $listdb.filter.keywords}&keywords={$listdb.filter.keywords}{/if}"}'>待发送<span class="badge badge-info">{$listdb.msg_count.wait}</span></a></li>
+	<li class="{if $listdb.filter.errorval eq '2'}active{/if}"><a class="data-pjax" href='{url path="push/admin/init" args="errorval=2{if $listdb.filter.keywords}&keywords={$listdb.filter.keywords}{/if}"}'>发送成功<span class="badge badge-info">{$listdb.msg_count.success}</span></a></li>
+	<li class="{if $listdb.filter.errorval eq '3'}active{/if}"><a class="data-pjax" href='{url path="push/admin/init" args="errorval=3{if $listdb.filter.keywords}&keywords={$listdb.filter.keywords}{/if}"}'>发送失败<span class="badge badge-info">{$listdb.msg_count.faild}</span></a></li>
 </ul>
 
 <!-- 批量操作、筛选、搜索 -->
 <div class="row-fluid batch" >
-	<form method="post" action="{$search_action}&appid={$appid}" name="searchForm">
-	
+	<form method="post" action="{$search_action}" name="searchForm">
 		<div class="btn-group f_l m_r5">
 			<a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-				<i class="fontello-icon-cog"></i>{lang key='push::push.batch'}
-				<span class="caret"></span>
+				<i class="fontello-icon-cog"></i>批量操作<span class="caret"></span>
 			</a>
 			<ul class="dropdown-menu">
-				<li><a class="button_remove" data-toggle="ecjiabatch" data-idClass=".checkbox:checked" data-url='{url path="push/admin/batch" args="appid={$appid}"}' data-msg="{lang key='push::push.remove_msg_confirm'}" data-noSelectMsg="{lang key='push::push.empty_select_msg'}" data-name="message_id" href="javascript:;"><i class="fontello-icon-trash"></i>{lang key='push::push.remove_msg'}</a></li>
-				<li><a class="button_remove" data-toggle="ecjiabatch" data-idClass=".checkbox:checked" data-url='{url path="push/admin/batch_resend" args="appid={$appid}"}' data-msg="{lang key='push::push.resend_confirm'}" data-noSelectMsg="{lang key='push::push.emtpy_resend_msg'}" data-name="message_id" href="javascript:;"><i class="fontello-icon-chat-empty"></i>{lang key='push::push.resend_msg'}</a></li>
+				<li><a class="button_remove" data-toggle="ecjiabatch" data-idClass=".checkbox:checked" data-url='{url path="push/admin/batch_resend" args="appid={$appid}"}' data-msg="{lang key='push::push.resend_confirm'}" data-noSelectMsg="{lang key='push::push.emtpy_resend_msg'}" data-name="message_id" href="javascript:;"><i class="fontello-icon-chat-empty"></i>批量发送</a></li>
 			</ul>
 		</div>
-		
-		<div class="choose_list f_l">
-			<div class="screen">
-				<!-- 级别 -->
-				<select name="status" class="no_search w150"  id="select-status">
-					<option value=''  {if $smarty.get.status eq '-1' } selected="true" {/if}>{lang key='push::push.select_push_status'}</option>
-					<option value='0' {if $smarty.get.status eq '0'} selected="true" {/if}>{lang key='push::push.push_fail'}</option>
-					<option value='1' {if $smarty.get.status eq '1'} selected="true" {/if}>{lang key='push::push.push_success'}</option>
-				</select>
-				<button class="btn screen-btn" type="button">{lang key='push::push.filter'}</button>
-			</div>
-		</div>
-		
+	
 		<div class="choose_list f_r" >
 			<input type="text" name="keywords" value="{$listdb.filter.keywords}" placeholder="{lang key='push::push.msg_keywords'}"/>
-			<button class="btn search_push" type="button">{lang key='push::push.search'}</button>
+			<button class="btn search_push" type="button">搜索</button>
 		</div>
 	</form>
 </div>
@@ -65,11 +49,10 @@
 					<thead>
 						<tr>
 							<th class="table_checkbox"><input type="checkbox" name="select_rows" data-toggle="selectall" data-children=".checkbox"/></th>
-							<th class="w200">{lang key='push::push.device_type'}</th>
-							<th class="w200">{lang key='push::push.msg_subject'}</th>
-							<th class="w350">{lang key='push::push.msg_content'}</th>
-							<th class="w350">{lang key='push::push.push_status'}</th>
-							<th class="w200">{lang key='push::push.add_time'}</th>
+							<th class="w150">设备类型</th>
+							<th>消息主题/消息内容</th>
+							<th class="w150">推送时间</th>
+							<th class="w200">推送状态</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -79,31 +62,35 @@
 								<span><input type="checkbox" name="checkboxes[]" class="checkbox" value="{$val.message_id}"/></span>
 							</td>
 							<td>
-								<span>{$val.device_client}</span>
+								<span>{if $val.device_client eq 'iphone'}iPhone{elseif $val.device_client eq 'android'}Android{/if}<br>{$val.app_name}</span>
 								<div class="edit-list">
 									<!-- {if $val.in_status neq 1} -->
-									<a class="ajaxpush" data-msg="{lang key='push::push.push_confirm'}" href='{url path="push/admin/push" args="message_id={$val.message_id}"}'>{lang key='push::push.push'}</a>&nbsp;|&nbsp;
+										<a class="ajaxpush" data-msg="{lang key='push::push.push_confirm'}" href='{url path="push/admin/resend" args="message_id={$val.message_id}"}'>{lang key='push::push.push'}</a>&nbsp;|&nbsp;
 									<!-- {else} -->
-									<a class="ajaxpush" data-msg="{lang key='push::push.resend_confirm'}" href='{url path="push/admin/push" args="message_id={$val.message_id}"}'>{lang key='push::push.resend'}</a>&nbsp;|&nbsp;
+										<a class="ajaxpush" data-msg="{lang key='push::push.resend_confirm'}" href='{url path="push/admin/resend" args="message_id={$val.message_id}"}'>{lang key='push::push.resend'}</a>&nbsp;|&nbsp;
 									<!-- {/if} -->
-							      	<a class="data-pjax" href='{RC_Uri::url("push/admin/push_copy", "message_id={$val.message_id}")}'>{lang key='push::push.push_copy'}</a>&nbsp;|&nbsp;
-									<a class="ajaxremove ecjiafc-red" data-toggle="ajaxremove" data-msg="{lang key='push::push.remove_msg_confirm'}" href='{url path="push/admin/remove" args="message_id={$val.message_id}"}' title="{lang key='system::system.drop'}">{lang key='system::system.drop'}</a>
+							      	<a class="data-pjax" href='{RC_Uri::url("push/admin/push_copy", "message_id={$val.message_id}")}'>{lang key='push::push.push_copy'}</a>
 								</div>
 							</td>
-							<td class="hide-edit-area">
-								{$val.title}
-							</td>
-							<td>{$val.content}</td>
 							<td>
-							{if $val.in_status == 1}
-								{lang key='push::push.push_success'}<br>
-								{lang key='push::push.has_pushed'}<font class="ecjiafc-red">{$val.push_count}</font>{lang key='push::push.time'}<br>
-								{lang key='push::push.label_push_on'}{$val.push_time}
-							{else}
-								{lang key='push::push.push_fail'}
-							{/if}
+								{$val.title}<br>{$val.content}
 							</td>
-							<td>{$val.add_time}</td>
+							<td>{$val.push_time}</td>
+							<td>
+								{if $val.in_status == 1}
+									{lang key='push::push.push_success'}<br>
+									{lang key='push::push.has_pushed'}<font class="ecjiafc-red">{$val.push_count}</font>{lang key='push::push.time'}<br>
+									{lang key='push::push.label_push_on'}{$val.push_time}
+								{else}
+									{if $val.last_error_message}
+										<a class="hint--left  hint--error"  data-hint="{$val.last_error_message|escape}">
+											<span class="ecjiafc-red">
+											<u>发送失败</u></span>
+										</a>
+									{else}发送失败{/if}<br><br>
+								{/if}
+								<br>
+							</td>
 						</tr>
 						<!-- {foreachelse} -->
 						<tr><td class="no-records" colspan="6">{lang key='system::system.no_records'}</td></tr>

@@ -42,6 +42,7 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 	<div class="ecjia" id="get_location" data-url="{url path='location/index/get_location_msg'}">
 		<input type="hidden" name="key" value="{$key}"/>
 		<input type="hidden" name="referer" value="{$referer}"/>
+		<input type="hidden" name="wxconfig_url" value="{url path='user/index/wxconfig'}"/>
 		<!-- {block name="main-content"} --><!-- {/block} -->
 		<!-- #BeginLibraryItem "/library/page_menu.lbi" --><!-- #EndLibraryItem -->
 	</div>
@@ -53,8 +54,9 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 	<script type="text/javascript" src="{$theme_url}lib/jquery/jquery.cookie.js" ></script>
 	<script type="text/javascript" src="{$theme_url}lib/iscroll/js/iscroll.js" ></script>
 	<script type="text/javascript" src="{$theme_url}lib/bootstrap3/js/bootstrap.min.js" ></script>
-	<script type="text/javascript" src="{$theme_url}lib/ecjiaUI/ecjia.js" ></script>
+	<script type="text/javascript" src="{$theme_url}lib/ecjiaUI/ecjia.js"></script>
 	<script type="text/javascript" src="{$theme_url}lib/jquery-form/jquery.form.min.js" ></script>	
+	<script type="text/javascript" src="{$theme_url}lib/clipboard/js/clipboard.min.js" ></script>	
 	<script type="text/javascript" src="https://3gimg.qq.com/lightmap/components/geolocation/geolocation.min.js"></script>
 	
 	<script type="text/javascript" src="{$theme_url}lib/jquery-localstorage/jquery.localstorage.js" ></script>	
@@ -72,12 +74,14 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 
     <script type="text/javascript">var theme_url = "{$theme_url}";</script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.goods_detail.js" ></script>
-    <script type="text/javascript" src="{$theme_url}js/ecjia.touch.spread.js" ></script>
+    <script src="https://res.wx.qq.com/open/js/jweixin-1.0.0.js"> </script>
+ 	<script type="text/javascript" src="{$theme_url}js/ecjia.touch.spread.js" ></script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.user_account.js" ></script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.franchisee.js" ></script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.comment.js" ></script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.raty.js" ></script>
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.fly.js" ></script>
+    <script type="text/javascript" src="{$theme_url}js/ecjia.touch.quickpay.js" ></script>
     <!-- 弹窗 -->
     <script type="text/javascript" src="{$theme_url}js/ecjia.touch.intro.min.js" ></script>
 	<script type="text/javascript" src="{$theme_url}lib/Validform/Validform_v5.3.2_min.js"></script>
@@ -113,6 +117,7 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 <!-- {else} -->
 <title>{block name="title"}{$page_title}{/block}</title>
 <!-- {block name="meta"} --><!-- {/block} -->
+<input type="hidden" name="wxconfig_url" value="{url path='user/index/wxconfig'}"/>
 <!-- {block name="main-content"} --><!-- {/block} -->
 <!-- #BeginLibraryItem "/library/page_menu.lbi" --><!-- #EndLibraryItem -->
 <!-- {block name="footer"} --><!-- {/block} -->

@@ -56,3 +56,8 @@
 |
 */
 
+collect(RC_Config::get('app', []))->map(function ($app) {
+    RC_Loader::load_app_class('hooks.route_' . $app, $app, false);
+});
+
+// end

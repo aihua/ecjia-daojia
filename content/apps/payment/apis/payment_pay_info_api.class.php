@@ -52,11 +52,6 @@ defined('IN_ECJIA') or exit('No permission resources.');
  */
 class payment_pay_info_api extends Component_Event_Api {
 	
-	public function __construct() {
-		parent::__construct();
-		RC_Loader::load_app_class('payment_factory', 'payment', false);
-	}
-	
     /**
      * @return array
      */
@@ -92,8 +87,10 @@ class payment_pay_info_api extends Component_Event_Api {
 					$code_list[$value['name']] = $value['value'];
 				}
 			}
-			$payment_handle = new payment_factory($code);
-			$pay['pay_config'] = $payment_handle->configure_forms($code_list, true);
+// 			$payment_handle = new payment_factory($code);
+			$payment_handle = with(new Ecjia\App\Payment\PaymentPlugin)->channel($code);
+// 			$pay['pay_config'] = $payment_handle->configure_forms($code_list, true);
+			$pay['pay_config'] = $payment_handle->makeFormData($code_list);
 		}
 		/* 如果以前没设置支付费用，编辑时补上 */
 		if (!isset($pay['pay_fee'])) {

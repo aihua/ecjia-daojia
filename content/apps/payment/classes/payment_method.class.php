@@ -56,7 +56,6 @@ class payment_method {
 	
 	public function __construct() {
 		$this->db = RC_Model::model('payment/payment_model');
-		RC_Loader::load_app_class('payment_factory', 'payment', false);
 	}
 	
 	
@@ -125,7 +124,8 @@ class payment_method {
 	    }
 	    $config['pay_code'] = $pay_code;
 	    $config['pay_name'] = $payment_info['pay_name'];
-	    $handler = new payment_factory($pay_code, $config);
+// 	    $handler = new payment_factory($pay_code, $config);
+	    $handler = with(new Ecjia\App\Payment\PaymentPlugin)->channel($pay_code);
 	    return $handler;
 	}
 	

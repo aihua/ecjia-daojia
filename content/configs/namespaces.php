@@ -55,6 +55,24 @@ return array(
 	'Ecjia\App\Wechat' => $contentDir . '/apps/wechat/classes',
 	'Ecjia\App\Article' => $contentDir . '/apps/article/classes',
 	'Ecjia\App\Sms' => $contentDir . '/apps/sms/classes',
+	'Ecjia\App\Weapp' => $contentDir . '/apps/weapp/classes',
+	'Ecjia\App\Mobile' => $contentDir . '/apps/mobile/classes',
+	'Ecjia\App\Payment' => $contentDir . '/apps/payment/classes',
+	'Ecjia\App\Maintain' => $contentDir . '/apps/maintain/classes',
+	'Ecjia\App\Push' => $contentDir . '/apps/push/classes',
+	'Ecjia\App\Quickpay' => $contentDir . '/apps/quickpay/classes',
+	'Ecjia\App\Connect' => $contentDir . '/apps/connect/classes',
+    'Ecjia\App\Cron' => $contentDir . '/apps/cron/classes',
+    'Ecjia\App\Commission' => $contentDir . '/apps/commission/classes',
+    'Ecjia\App\Cart' => $contentDir . '/apps/cart/classes',
+    'Ecjia\App\Shipping' => $contentDir . '/apps/shipping/classes',
+    'Ecjia\App\Orders' => $contentDir . '/apps/orders/classes',
+    'Ecjia\App\Goods' => $contentDir . '/apps/goods/classes',
+    'Ecjia\App\Store' => $contentDir . '/apps/store/classes',
+    'Ecjia\App\Setting' => $contentDir . '/apps/setting/classes',
+    
+    'Royalcms\Component\Cron' => $contentDir . '/apps/cron/classes/Royalcms/Component/Cron',
+    'Royalcms\Component\Shoppingcart' => $contentDir . '/apps/cron/classes/Royalcms/Component/Shoppingcart',
 );
 
 //end

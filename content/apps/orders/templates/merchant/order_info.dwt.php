@@ -171,6 +171,7 @@ ecjia.merchant.order.info();
 								<td><div align="right"><strong>{lang key='orders::order.label_pay_time'}</strong></div></td>
 								<td>{$order.pay_time}</td>
 							</tr>
+							
 							<tr>
 								<td><div align="right"><strong>{lang key='orders::order.label_shipping'}</strong></div></td>
 								<td>
@@ -183,37 +184,40 @@ ecjia.merchant.order.info();
 									{if !$invalid_order}
 									<a class="data-pjax" href='{url path="orders/merchant/edit" args="order_id={$order.order_id}&step=shipping"}'>{lang key='system::system.edit'}</a>
 									{/if}
+									{if $shipping_code == 'ship_cac'}
+									(提货码：{if $meta_value neq ''}{$meta_value}{else}暂无{/if})
+									{else}
 									<input type="button" class="btn btn-primary" onclick="window.open('{url path="orders/merchant/info" args="order_id={$order.order_id}&shipping_print=1"}')" value="{lang key='orders::order.print_shipping'}">
+									{/if}
 									{if $order.insure_fee gt 0}{lang key='orders::order.label_insure_fee'}{$order.formated_insure_fee}{/if}
 									{/if}
 								</td>
 								<td><div align="right"><strong>{lang key='orders::order.label_shipping_time'}</strong></div></td>
 								<td>{$order.shipping_time}</td>
 							</tr>
+							
 							<tr>
-								<td><div align="right"><strong>{if $is_o2o_express}{lang key="orders::order.label_express_user"}{else}{lang key='orders::order.label_invoice_no'}{/if}</strong></div></td>
-								<td>
-									{if is_o2o_express}
-										{$express_order.express_user}{if $express_order.express_mobile}（{$express_order.express_mobile}）{/if}
-									{else}
-										{if $order.shipping_id gt 0 and $order.shipping_status gt 0}
-											<span>{if $order.invoice_no}{$order.invoice_no}{else}暂无{/if}</span>&nbsp;
-											<a href='{url path="orders/merchant/edit" args="order_id={$order.order_id}&step=shipping"}' class="special data-pjax">{lang key='system::system.edit'}</a>
-										{/if}
-									{/if}
-								</td>
+								<td><div align="right"><strong>{lang key='orders::order.label_invoice_no'}</strong></div></td>
+								<td>{if $order.shipping_id gt 0 and $order.shipping_status gt 0}<span>{if $order.invoice_no}{$order.invoice_no}{else}暂无{/if}</span>&nbsp;
+								<a href='{url path="orders/merchant/edit" args="order_id={$order.order_id}&step=shipping"}' class="special data-pjax">{lang key='system::system.edit'}</a>{/if}</td>
 								<td><div align="right"><strong>{lang key='orders::order.from_order'}</strong></div></td>
-								<td>{$order.referer}</td>
+								<td>{if $order.referer eq 'ecjia-cashdesk'}收银台{else}{$order.referer}{/if}</td>
 							</tr>
 							
-							{if $order.express_user}
+							<!-- {if $order.express_user} -->
 							<tr>
 								<td><div align="right"><strong>{lang key='orders::order.label_express_user'}</strong></div></td>
-								<td>{$order.express_user}</span>&nbsp;
+								<td>{$order.express_user}</td>
 								<td><div align="right"><strong>{lang key='orders::order.label_express_user_mobile'}</strong></div></td>
 								<td>{$order.express_mobile}</td>
 							</tr>
-							{/if}
+							<!-- {/if}  -->
+							
+							<tr>
+								<td><div align="right"><strong>期望送达时间：</strong></div></td>
+								<td colspan="3">{$order.expect_shipping_time}</td>
+							</tr>
+							
 						</tbody>
 					</table>
 				</div>
@@ -234,11 +238,13 @@ ecjia.merchant.order.info();
 						<tbody class="first-td-no-leftbd">
 							<tr>
 								<td><div align="right"><strong>{lang key='orders::order.label_inv_type'}</strong></div></td>
-								<td colspan="3">{$order.inv_type}</td>
+								<td>{$order.inv_type}</td>
+								<td><div align="right"><strong>{lang key='orders::order.label_inv_tax_no'}</strong></div></td>
+								<td>{$inv_tax_no}</td>
 							</tr>
 							<tr>
 								<td><div align="right"><strong>{lang key='orders::order.label_inv_payee'}</strong></div></td>
-								<td>{$order.inv_payee}</td>
+								<td>{$inv_payee}</td>
 								<td><div align="right"><strong>{lang key='orders::order.label_inv_content'}</strong></div></td>
 								<td>{$order.inv_content}</td>
 							</tr>

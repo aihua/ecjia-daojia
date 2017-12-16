@@ -62,6 +62,8 @@ return array (
 			'collation' => 'utf8mb4_unicode_ci',
 			'prefix'    => env('DB_PREFIX', 'ecjia_'),
 		    'port'      => env('DB_PORT', 3306),
+		    'strict'    => false,
+		    'unix_socket'=> env('DB_SOCKET', ''),
 		),
 	),
     

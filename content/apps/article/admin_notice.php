@@ -101,7 +101,7 @@ class admin_notice extends ecjia_admin {
 	 * 添加商家公告
 	 */
 	public function add() {
-		$this->admin_priv('store_notice_update');
+		$this->admin_priv('store_notice_manage');
 		
 		$article_type = !empty($_GET['article_type']) ? trim($_GET['article_type']) : 'merchant_notice';
 		$data = get_cat_type_info($article_type);
@@ -116,7 +116,7 @@ class admin_notice extends ecjia_admin {
 	}
 	
 	public function insert() {
-		$this->admin_priv('store_notice_update', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('store_notice_manage', ecjia::MSGTYPE_JSON);
 		
 		$title    	= !empty($_POST['title'])       ? trim($_POST['title'])         : '';
 		$content  	= !empty($_POST['content'])     ? trim($_POST['content'])       : '';
@@ -126,7 +126,6 @@ class admin_notice extends ecjia_admin {
 		$article_type = !empty($_GET['article_type']) ? trim($_GET['article_type'])	: 'merchant_notice';
 		
  		$is_only = RC_DB::table('article as a')
-     			->leftJoin('article_cat as ac', RC_DB::raw('a.cat_id'), '=', RC_DB::raw('ac.cat_id'))
      			->where('title', $title)
      			->where(RC_DB::raw('a.article_type'), $article_type)
      			->count();
@@ -149,11 +148,10 @@ class admin_notice extends ecjia_admin {
 				return $this->showmessage($upload->error(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 			}
 		}
-		$cat_id = RC_DB::table('article_cat')->where('cat_type', $article_type)->pluck('cat_id');
-		
+
 		$data = array(
 			'title' 	   	=> $title,
-			'cat_id'   		=> $cat_id,
+			'cat_id'   		=> 0,
 			'content'  		=> $content,
 			'keywords'  	=> $keywords,
 			'file_url'		=> $file_name,
@@ -178,13 +176,12 @@ class admin_notice extends ecjia_admin {
 	 * 编辑商家公告
 	 */
 	public function edit() {
-		$this->admin_priv('store_notice_update');
+		$this->admin_priv('store_notice_manage');
 	
 		$id = intval($_GET['id']);
 		$info = RC_DB::table('article as a')
-			->leftJoin('article_cat as ac', RC_DB::raw('a.cat_id'), '=', RC_DB::raw('ac.cat_id'))
 			->where(RC_DB::raw('a.article_id'), $id)
-			->selectRaw('a.*, ac.cat_type')
+			->selectRaw('a.*')
 			->first();
 		
 		$article_type = !empty($_GET['article_type']) ? trim($_GET['article_type']) : $info['article_type'];
@@ -198,8 +195,8 @@ class admin_notice extends ecjia_admin {
 		if (!empty($info['content'])) {
 			$info['content'] = stripslashes($info['content']);
 		}
-
-		if (!empty($info['file_url']) && file_exists(RC_Upload::upload_path($info['file_url']))) {
+		$disk = RC_Filesystem::disk();
+		if (!empty($info['file_url']) && $disk->exists(RC_Upload::upload_path($info['file_url']))) {
 			$info['image_url'] = RC_Upload::upload_url($info['file_url']);
 		} else {
 			$info['image_url'] = RC_Uri::admin_url('statics/images/nopic.png');
@@ -211,7 +208,7 @@ class admin_notice extends ecjia_admin {
 	}
 	
 	public function update() {
-		$this->admin_priv('store_notice_update', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('store_notice_manage', ecjia::MSGTYPE_JSON);
 		
 		$title    	= !empty($_POST['title'])       ? trim($_POST['title'])         : '';
 		$content  	= !empty($_POST['content'])     ? trim($_POST['content'])       : '';
@@ -222,9 +219,8 @@ class admin_notice extends ecjia_admin {
 		$article_type = !empty($_GET['article_type']) ? trim($_GET['article_type']) : 'merchant_notice';
 		
 		$is_only = RC_DB::table('article as a')
-			->leftJoin('article_cat as ac', RC_DB::raw('a.cat_id'), '=', RC_DB::raw('ac.cat_id'))
 			->where('title', $title)
-			->where(RC_DB::raw('ac.cat_type'), $article_type)
+			->where(RC_DB::raw('a.article_type'), $article_type)
 			->where(RC_DB::raw('a.article_id'), '!=', $id)
 			->count();
 		
@@ -278,14 +274,14 @@ class admin_notice extends ecjia_admin {
 	 * 删除文章
 	 */
 	public function remove() {
-		$this->admin_priv('store_notice_delete', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('store_notice_manage', ecjia::MSGTYPE_JSON);
 		
 		$id   = intval($_GET['id']);
 		$info = RC_DB::table('article')->where('article_id', $id)->first();
 		
+		$disk = RC_Filesystem::disk();
 		if (RC_DB::table('article')->where('article_id', $id)->delete()) {
-			if (!empty($info['file_url']) && file_exists(RC_Upload::upload_path() . $info['file_url'])) {
-				$disk = RC_Filesystem::disk();
+			if (!empty($info['file_url']) && $disk->exists(RC_Upload::upload_path() . $info['file_url'])) {
 				$disk->delete(RC_Upload::upload_path() . $info['file_url']);
 			}
 			
@@ -303,7 +299,7 @@ class admin_notice extends ecjia_admin {
 	 * 删除附件
 	 */
 	public function del_file() {
-		$this->admin_priv('store_notice_update', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('store_notice_manage', ecjia::MSGTYPE_JSON);
 	
 		$id = !empty($_GET['id']) ? intval($_GET['id']) : 0;
 		$old_url = RC_DB::table('article')->where('article_id', $id)->pluck('file_url');
@@ -331,7 +327,7 @@ class admin_notice extends ecjia_admin {
 		}
 		
 	    $data = $db_article
-     			->leftJoin('article_cat as ac', RC_DB::raw('a.cat_id'), '=', RC_DB::raw('ac.cat_id'))
+     			->orderBy(RC_DB::raw('a.add_time'), 'desc')
      			->get();
 	    
 	    $list = array();

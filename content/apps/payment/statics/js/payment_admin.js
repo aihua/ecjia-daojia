@@ -3,6 +3,13 @@
     app.payment_list = {
         /* 支付方式编辑form提交 */
         submit: function () {
+            $('.switch').on('click', function (e) {
+                var url = $(this).attr('data-url');
+            	$.get(url, function(data) {
+            		ecjia.admin.showmessage(data);
+            	});
+            });
+            
             var $form = $('form[name="editForm"]');
             /* 给表单加入submit事件 */
             var option = {
@@ -45,7 +52,7 @@
                 var url = $("form[name='searchForm']").attr('action');
                 var pay_status = $("select[name='pay_status']").val();
                 var order_sn = $("input[name='order_sn']").val();
-                var trade_no = $("input[name='trade_no']").val();
+                var keywords = $("input[name='keywords']").val();
 
                 if (pay_status != 0) {
                 	url += '&pay_status=' + pay_status;
@@ -53,8 +60,8 @@
                 if (order_sn != '') {
                     url += '&order_sn=' + order_sn;
                 }
-                if (trade_no != '') {
-                    url += '&trade_no=' + trade_no;
+                if (keywords != '') {
+                    url += '&keywords=' + keywords;
                 }
                 ecjia.pjax(url);
             });

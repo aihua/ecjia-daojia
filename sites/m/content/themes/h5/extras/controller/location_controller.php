@@ -137,7 +137,7 @@ class location_controller {
     			ecjia_front::$controller->assign('referer_url', urlencode($referer_url));
     		}
     		
-    		$city_id = !empty($_GET['city_id']) ? intval($_GET['city_id']) : 0;
+    		$city_id = !empty($_GET['city_id']) ? trim($_GET['city_id']) : '';
     		ecjia_front::$controller->assign('city_id', $city_id);
     		
     		ecjia_front::$controller->assign_title('选择城市');
@@ -162,17 +162,18 @@ class location_controller {
     	$latitude  			= $latng['lat'];
 
     	$ad_info 			= $location_content['ad_info'];
-    	$city_name			= $ad_info['city'];
+    	$city_name			= $ad_info['district'];
     	
     	$params = array(
     		'token' => ecjia_touch_user::singleton()->getToken(),
     		'city' 	=> $city_name,
     	);
     	$rs = ecjia_touch_manager::make()->api(ecjia_touch_api::SHOP_REGION_DETAIL)->data($params)->run();
+    	
     	if (is_ecjia_error($rs)) {
     		return ecjia_front::$controller->showmessage($rs->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('pjaxurl' => ''));
     	} else {
-    		$city_id = !empty($rs['region_id']) ? $rs['region_id'] : 0;
+    		$city_id = !empty($rs['region_id']) ? $rs['region_id'] : '';
     	}
     	$referer_url = RC_Uri::url('touch/index/init');
     	setcookie("referer_url", $referer_url, RC_Time::gmtime() + 3600 * 24 * 7);
@@ -185,20 +186,20 @@ class location_controller {
     	}
     	
     	//写入cookie
-    	setcookie("location_address", $location_address, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("location_name", $location_name, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("longitude", $longitude, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("latitude", $latitude, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("location_address_id", 0, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("city_id", $city_id, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("city_name", $rs['region_name'], RC_Time::gmtime() + 3600 * 24 * 7);
+    	setcookie("location_address", $location_address, time() + 1800);
+    	setcookie("location_name", $location_name, time() + 1800);
+    	setcookie("longitude", $longitude, time() + 1800);
+    	setcookie("latitude", $latitude, time() + 1800);
+    	setcookie("location_address_id", 0, time() + 1800);
+    	setcookie("city_id", $city_id, time() + 1800);
+    	setcookie("city_name", $rs['region_name'], time() + 1800);
     	
     	//自动定位的城市id name 经纬度
-    	setcookie("position_city_id", $city_id, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("position_city_name", $rs['region_name'], RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("position_name", $location_name, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("position_longitude", $longitude, RC_Time::gmtime() + 3600 * 24 * 7);
-    	setcookie("position_latitude", $latitude, RC_Time::gmtime() + 3600 * 24 * 7);
+    	setcookie("position_city_id", $city_id, time() + 1800);
+    	setcookie("position_city_name", $rs['region_name'], time() + 1800);
+    	setcookie("position_name", $location_name, time() + 1800);
+    	setcookie("position_longitude", $longitude, time() + 1800);
+    	setcookie("position_latitude", $latitude, time() + 1800);
     	
     	return ecjia_front::$controller->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('url' => $href_url));
     }

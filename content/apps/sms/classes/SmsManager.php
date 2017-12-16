@@ -54,12 +54,14 @@ use Ecjia\App\Sms\EventAbstract;
 use ecjia_error;
 use RC_Time;
 use RC_Validator;
+use RC_Hook;
 
 class SmsManager extends Object
 {
         
     protected $model;
     protected $event;
+    protected $channel;
     
     public function setTemplateModel(SmsTemplateModel $model)
     {
@@ -83,7 +85,19 @@ class SmsManager extends Object
         return $this->event;
     }
     
-    public function beforeSend($mobile, array $template_var)
+    public function setChannel($channel)
+    {
+        $this->channel = $channel;
+        
+        return $this;
+    }
+    
+    public function getChannel()
+    {
+        return $this->channel;
+    }
+    
+    public function beforeSend($beforeSend, $mobile, array $template_var)
     {
         //发送前处理...
         //验证数据
@@ -112,7 +126,10 @@ class SmsManager extends Object
      */
     public function send($mobile, array $template_var)
     {
-        $beforeSend = $this->beforeSend($mobile, $template_var);
+        RC_Hook::add_filter('sms_event_send_before', array($this, 'beforeSend'), 10, 3);
+        
+        $beforeSend = true;
+        $beforeSend = RC_Hook::apply_filters('sms_event_send_before', $beforeSend, $mobile, $template_var);
         if (is_ecjia_error($beforeSend))
         {
             return $beforeSend;
@@ -120,7 +137,12 @@ class SmsManager extends Object
         else 
         {
             $sms = new SmsPlugin();
-            $handler = $sms->defaultChannel();
+            if (is_null($this->channel)) {
+                $handler = $sms->defaultChannel();
+            } else {
+                $handler = $sms->channel($this->channel);
+            }
+
             $plugin = $handler->getCode();
             //发送
             $template = $this->model->getTemplateByCode($this->event->getCode(), $plugin);
@@ -135,7 +157,15 @@ class SmsManager extends Object
             $handler->setTemplateId($template['template_id']);
             $handler->setSignName($template['sign_name']);
             $result = $handler->send($mobile);
-            $result = $this->afterSend($mobile, $template_var, $result);
+            
+            /**
+             * 发送消息后做什么，过滤器
+             * @param $result       发送结果
+             * @param $mobile       手机号
+             * @param $template_var 模板变量
+             * @return $result
+             */
+            $result = RC_Hook::apply_filters('sms_event_send_after', $result, $mobile, $template_var);
             
             $this->addRecord($mobile, $template, $template_var, $handler->getContent(), $plugin, $result);
             
@@ -164,7 +194,8 @@ class SmsManager extends Object
         $sign_name      = $sms->sign_name;
         $plugin         = $sms->channel_code;
     
-        $beforeSend = $this->beforeSend($mobile, $template_var);
+        $beforeSend = true;
+        $beforeSend = RC_Hook::apply_filters('sms_resend_send_before', $beforeSend, $mobile, $template_var);
         if (is_ecjia_error($beforeSend))
         {
             return $beforeSend;
@@ -178,7 +209,15 @@ class SmsManager extends Object
             $handler->setTemplateId($template_id);
             $handler->setSignName($sign_name);
             $result = $handler->send($mobile);
-            $result = $this->afterSend($mobile, $template_var, $result);
+            
+            /**
+             * 重新发送消息后做什么，过滤器
+             * @param $result       推送结果
+             * @param $mobile       手机号
+             * @param $template_var 模板变量
+             * @return $result
+             */
+            $result = RC_Hook::apply_filters('sms_resend_send_after', $result, $mobile, $template_var);
             
             $this->updateRecord($sms, $result);
             
@@ -189,25 +228,18 @@ class SmsManager extends Object
             return true;
         }
     
-    }
-    
-    public function afterSend($mobile, array $template_var, $result)
-    {
-        //发送后处理...
-        return $result;
-    }
-    
+    }    
     
     public function addRecord($mobile, $template, $template_var, $msg, $plugin, $result, $priority = 1)
     {
     	if (is_ecjia_error($result)) 
     	{
     	    $error_data = $result->get_error_data();
-    	    $msgid = $result->$error_data['data']['msgid'];
+    	    $msgid = $error_data->getMsgid();
     	} 
     	else 
     	{
-    	    $msgid = $result['data']['msgid'];
+    	    $msgid = $result->getMsgid();
     	}
     	
         $data = array(
@@ -241,14 +273,14 @@ class SmsManager extends Object
         if (is_ecjia_error($result))
         {
             $error_data = $result->get_error_data();
-            $msgid = $error_data['data']['msgid'];
+            $msgid = $error_data->getMsgid();
 
             $sms->error = 1;
             $sms->last_error_message = $result->get_error_message();
         }
         else
         {
-            $msgid = $result['data']['msgid'];
+            $msgid = $result->getMsgid();
 
             $sms->error = 0;
         }

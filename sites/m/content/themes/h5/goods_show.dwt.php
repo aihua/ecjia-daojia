@@ -253,7 +253,7 @@ var releated_goods = {$releated_goods};
 		{$goods_desc}
 		<!-- {else} -->
 		<div class="ecjia-nolist">
-			<img  src="{$theme_url}images/no_goods.png">
+			<img  src="{$theme_url}images/wallet/null280.png">
 			<p class="tags_list_font">{t}暂无任何商品详情{/t}</p>
 		</div>
 		<!-- {/if} -->
@@ -270,7 +270,7 @@ var releated_goods = {$releated_goods};
 		</table>
 		<!-- {else} -->
 		<div class="ecjia-nolist">
-			<img  src="{$theme_url}images/property.png">
+			<img  src="{$theme_url}images/wallet/null280.png">
 			<p class="tags_list_font">{t}暂无任何规格参数{/t}</p>
 		</div>
 		<!-- {/if} -->
@@ -368,6 +368,7 @@ var releated_goods = {$releated_goods};
 </div>
 <!-- 遮罩层 -->
 <div class="a53" style="display: none;"></div>
+<input type="hidden" name="share_image" value="{$goods_info.img.thumb}">
 <!-- #BeginLibraryItem "/library/address_modal.lbi" --><!-- #EndLibraryItem -->
 <!-- #BeginLibraryItem "/library/goods_attr_modal.lbi" --><!-- #EndLibraryItem -->
 <!-- #BeginLibraryItem "/library/goods_attr_static_modal.lbi" --><!-- #EndLibraryItem -->

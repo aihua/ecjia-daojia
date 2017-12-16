@@ -68,13 +68,13 @@ class CityManage
         if ($this->type == 'cycleimage') {
             $repository = new CycleImageRepository();
             return $repository->getAllCitys();
-        } elseif($this->type == 'adsense') {
+        } elseif ($this->type == 'adsense') {
         	$repository = new AdPositionRepository();
         	return $repository->getAllCitys();
-        }elseif($this->type == 'group') {
+        }elseif ($this->type == 'group') {
         	$repository = new AdGroupRepository();
         	return $repository->getAllCitys();
-        }elseif($this->type == 'shortcut') {
+        }elseif ($this->type == 'shortcut') {
         	$repository = new ShortcutMenuRepository();
         	return $repository->getAllCitys();
         }
@@ -99,7 +99,7 @@ class CityManage
             } 
             else 
             {
-                $city_id = 0;
+                $city_id = '';
             }
         }
         

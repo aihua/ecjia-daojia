@@ -56,12 +56,12 @@ class detail_module extends api_front implements api_interface
     public function handleRequest(\Royalcms\Component\HttpKernel\Request $request)
     {
     	$city = $this->requestData('city');
-    	$city = str_replace('市', '', $city);
 		
-    	$city_detail = RC_DB::table('region')->where('region_name', 'like', '%'.mysql_like_quote($city).'%')->where('region_type', 2)->first();
+    	$citys = ecjia_region::getRegionsBySearch($city, 3);
+    	$city_detail = head($citys);
     	return array(
-				'region_id'		=> $city_detail['region_id'],
-				'region_name'	=> $city_detail['region_name'],
+			'region_id'		=> $city_detail['region_id'],
+			'region_name'	=> $city_detail['region_name'],
 		);
 	}
 }

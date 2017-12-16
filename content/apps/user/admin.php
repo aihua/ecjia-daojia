@@ -543,6 +543,9 @@ class admin extends ecjia_admin {
 		if (empty($row)) {
 			return $this->showmessage(RC_Lang::get('user::users.user_info_confirm'), ecjia::MSGTYPE_HTML | ecjia::MSGSTAT_ERROR );
 		}
+		if (!empty($row['parent_id'])) {
+		    $row['parent_username'] = RC_DB::table('users')->where('user_id', $row['parent_id'])->pluck('user_name');
+		}
 		
 		/* 获得用户等级名 */
 		$user['user_rank'] = RC_DB::table('user_rank')->where('rank_id', $row['user_rank'])->pluck('rank_name');
@@ -576,10 +579,10 @@ class admin extends ecjia_admin {
 			$field = array("ua.*,IF(address_id=".$row['address_id'].",1,0) as default_address,IFNULL(c.region_name, '') as country_name, IFNULL(p.region_name, '') as province_name,IFNULL(t.region_name, '') as city_name,IFNULL(d.region_name, '') as district_name");
 
 			$address_list = RC_DB::table('user_address as ua')
-					->leftJoin('region as c', RC_DB::raw('c.region_id'), '=', RC_DB::raw('ua.country'))
-					->leftJoin('region as p', RC_DB::raw('p.region_id'), '=', RC_DB::raw('ua.province'))
-					->leftJoin('region as t', RC_DB::raw('t.region_id'), '=', RC_DB::raw('ua.city'))
-					->leftJoin('region as d', RC_DB::raw('d.region_id'), '=', RC_DB::raw('ua.district'))
+					->leftJoin('regions as c', RC_DB::raw('c.region_id'), '=', RC_DB::raw('ua.country'))
+					->leftJoin('regions as p', RC_DB::raw('p.region_id'), '=', RC_DB::raw('ua.province'))
+					->leftJoin('regions as t', RC_DB::raw('t.region_id'), '=', RC_DB::raw('ua.city'))
+					->leftJoin('regions as d', RC_DB::raw('d.region_id'), '=', RC_DB::raw('ua.district'))
 					->where('user_id', $row['user_id'])
 					->orderBy('default_address', 'desc')
 					->selectRaw("ua.*, IF(address_id=".$row['address_id'].",1,0) as default_address, IFNULL(c.region_name, '') as country_name, IFNULL(p.region_name, '') as province_name, IFNULL(t.region_name, '') as city_name, IFNULL(d.region_name, '') as district_name")
@@ -600,6 +603,28 @@ class admin extends ecjia_admin {
 		$this->assign('user',			$user);
 		$this->assign('order_list',		$order);
 		$this->assign('address_list',	$address_list);
+		
+		/* 取出注册扩展字段 */
+		$extend_info_list = RC_DB::table('reg_fields')
+			->where('type', '<', 2)
+			->where('display', 1)
+			->where('id', '!=', 6)
+			->orderBy('dis_order', 'asc')
+			->orderBy('id', 'asc')
+			->get();
+		if (!empty($extend_info_list)) {
+			foreach ($extend_info_list AS $key => $val) {
+				switch ($val['id']) {
+					case 1:	 $extend_info_list[$key]['content'] = $user['msn']; break;
+					case 2:	 $extend_info_list[$key]['content'] = $user['qq']; break;
+					case 3:	 $extend_info_list[$key]['content'] = $user['office_phone']; break;
+					case 4:	 $extend_info_list[$key]['content'] = $user['home_phone']; break;
+					case 5:	 $extend_info_list[$key]['content'] = $user['mobile_phone']; break;
+					default: $extend_info_list[$key]['content'] = empty($temp_arr[$val['id']]) ? '' : $temp_arr[$val['id']] ;
+				}
+			}
+		}
+		$this->assign('extend_info_list', $extend_info_list);
 
 		$this->display('user_info.dwt');
 	}
@@ -726,10 +751,10 @@ class admin extends ecjia_admin {
 		$order = array();
 		/* 用户地址列表*/
 		$db_user_address = RC_DB::table('user_address as ua')
-			->leftJoin('region as c', RC_DB::raw('c.region_id'), '=', RC_DB::raw('ua.country'))
-			->leftJoin('region as p', RC_DB::raw('p.region_id'), '=', RC_DB::raw('ua.province'))
-			->leftJoin('region as t', RC_DB::raw('t.region_id'), '=', RC_DB::raw('ua.city'))
-			->leftJoin('region as d', RC_DB::raw('d.region_id'), '=', RC_DB::raw('ua.district'));
+			->leftJoin('regions as c', RC_DB::raw('c.region_id'), '=', RC_DB::raw('ua.country'))
+			->leftJoin('regions as p', RC_DB::raw('p.region_id'), '=', RC_DB::raw('ua.province'))
+			->leftJoin('regions as t', RC_DB::raw('t.region_id'), '=', RC_DB::raw('ua.city'))
+			->leftJoin('regions as d', RC_DB::raw('d.region_id'), '=', RC_DB::raw('ua.district'));
 		
 		if ($address_id) {
 			$db_user_address

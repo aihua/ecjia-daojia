@@ -47,17 +47,17 @@
 defined('IN_ECJIA') or exit('No permission resources.');
 
 /**
- * ECJIA 账号链接应用语言包
+ * ECJIA 账号连接应用语言包
  */
 return array(
 	//权限
-	'connect' 	=> '账号链接',
-	'edit' 		=> '编辑账号链接',
-	'enable' 	=> '启用账号链接',
-	'disable' 	=> '禁用账号链接',
+	'connect' 	=> '账号连接',
+	'edit' 		=> '编辑账号连接',
+	'enable' 	=> '启用账号连接',
+	'disable' 	=> '禁用账号连接',
 		
 	//控制器
-	'connect_list' 	=>  '账号链接列表',
+	'connect_list' 	=>  '账号连接列表',
 	'connect_type'	=>	'连接方式不存在',
 	'confirm_name'	=>	'该名称已存在！',	
 	'edit_success'	=>	'编辑主题成功！',

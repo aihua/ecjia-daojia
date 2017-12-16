@@ -13,7 +13,7 @@ defined('IN_ECJIA') or exit('No permission resources.');
 			<div class="select-location">
 				<i class="icon-position"></i>
 				<span class="current-position">{$info.city_name}</span>
-				<span class="choose-city">切换城市</span>
+				<span class="choose-city">切换位置</span>
 			</div>
 		</div>
 		<div class="ecjia-fl search" data-url="{RC_Uri::url('main/index/search')}">
@@ -26,7 +26,9 @@ defined('IN_ECJIA') or exit('No permission resources.');
 				<li {if $active eq 'main'}class="active"{/if}><a href="{RC_Uri::home_url()}">首页</a></li>
 				<li {if $active eq 'category'}class="active"{/if}><a class="merchant-list" href="{RC_Uri::url('merchant/store/category')}">商家</a></li>
 				<li><a class="nopjax" href="{RC_Uri::site_url('/sites/app/')}">下载APP</a></li>
+				{if ecjia::config('merchant_join_close') eq 0}
 				<li><a class="nopjax" href="{$info.merchant_url}" target="_blank">商家入驻</a></li>
+				{/if}
 				<li><a class="nopjax ecjia-back-green" href="{$info.merchant_login}" target="_blank">商家登录</a></li>
 			</ul>
 		</div>

@@ -98,8 +98,7 @@ class user_address_controller {
     		
     		$address_list = ecjia_touch_manager::make()->api(ecjia_touch_api::ADDRESS_LIST)->data(array('token' => $token))->run();
     		$address_list = is_ecjia_error($address_list) ? array() : $address_list;
-    		
-    		
+
     		ecjia_front::$controller->assign('address_list', $address_list);
     		ecjia_front::$controller->assign_title('收货地址管理');
     		
@@ -189,7 +188,8 @@ class user_address_controller {
     public static function add_address() {
     	$temp_data = user_address_controller::save_temp_data(1, 'add', $_GET['clear'], $_GET);
     	ecjia_front::$controller->assign('temp', $temp_data);
-    	$location_backurl = urlencode(RC_Uri::url('user/address/add_address'));
+    	
+    	$location_backurl = urlencode(RC_Uri::url('user/address/add_address', array('clear' => 0)));
     	ecjia_front::$controller->assign('location_backurl', $location_backurl);
     	
     	$referer_url = !empty($_GET['referer_url']) ? urlencode($_GET['referer_url']) : (!empty($_SESSION['referer_url']) ? $_SESSION['referer_url'] : '');
@@ -210,18 +210,26 @@ class user_address_controller {
     	$type = !empty($_GET['type']) ? trim($_GET['type']) : '';
     	ecjia_front::$controller->assign('type', $type);
     	
+    	$clear = !empty($_GET['clear']) ? intval($_GET['clear']) : 0;
+    	if ($clear == 1) {
+    		ecjia_front::$controller->assign('clear', $clear);
+    	}
+    	$region_data = user_function::get_region_list();
+    	ecjia_front::$controller->assign('region_data', $region_data);
+    	
     	$local = 1;
     	if (!empty($_SESSION['order_address_temp']['store_id'])) {
     		$store_id = $_SESSION['order_address_temp']['store_id'];
     		$addr = !empty($_GET['addr']) ? $_COOKIE['city_name'].trim($_GET['addr']) : $_COOKIE['location_address'];
     		
-    		$key = ecjia_config::has('map_baidu_key') ? ecjia::config('map_baidu_key') : '';
+    		$key = ecjia_config::has('map_qq_key') ? ecjia::config('map_qq_key') : '';
     		if (!empty($key)) {
-		    	$shop_point = file_get_contents("https://api.map.baidu.com/geocoder/v2/?address=$addr&output=json&ak=$key");
-	    		$shop_point = json_decode($shop_point, true);
-	    		
-	    		$address['longitude']	= $shop_point['result']['location']['lng'];
-	    		$address['latitude']	= $shop_point['result']['location']['lat'];
+                $addr = urlencode($addr);
+                $shop_point = RC_Http::remote_get("https://apis.map.qq.com/ws/geocoder/v1/?address=".$addr."&key=".$key);
+                $shop_point = json_decode($shop_point['body'], true);
+                $location   = (array)$shop_point['result']['location'];
+                $address['longitude'] = $location['lng'];
+                $address['latitude'] = $location['lat'];
 	    		
 	    		$param = array('address' => array('latitude' => $address['latitude'], 'longitude' => $address['longitude']), 'store_id' => $store_id);
 	    		$local = RC_Api::api('user', 'neighbors_address_store', $param);
@@ -229,22 +237,26 @@ class user_address_controller {
     		}
     	}
     	ecjia_front::$controller->assign('local', $local);
+    	ecjia_front::$controller->assign('get_region_url', RC_Uri::url('user/address/get_region'));
     	
-        ecjia_front::$controller->display('user_address_edit.dwt');
+    	ecjia_front::$controller->display('user_address_edit.dwt');
     }
 
     /**
      * 插入收货地址
      */
     public static function insert_address() {
-        if (empty($_POST['city_id']) || empty($_POST['address']) || empty($_POST['consignee']) || empty($_POST['mobile'])) {
+        if (empty($_POST['province']) || empty($_POST['city']) || empty($_POST['district']) || empty($_POST['street']) || empty($_POST['address']) || empty($_POST['consignee']) || empty($_POST['mobile'])) {
             return ecjia_front::$controller->showmessage('请完整填写相关信息', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('pjaxurl' => ''));
         }
 
         $params = array(
             'token' => ecjia_touch_user::singleton()->getToken(),
             'address' => array(
-                'city'      	=> intval($_POST['city_id']),
+                'province'   	=> trim($_POST['province']),
+            	'city'   		=> trim($_POST['city']),
+            	'district'   	=> trim($_POST['district']),
+            	'street'   		=> trim($_POST['street']),
                 'address'   	=> htmlspecialchars($_POST['address']),
                 'address_info'	=> htmlspecialchars($_POST['address_info']),
                 'consignee' 	=> htmlspecialchars($_POST['consignee']),
@@ -269,18 +281,18 @@ class user_address_controller {
         if (!empty($_SESSION['referer_url'])) {
         	$pjax_url = urldecode($_SESSION['referer_url']);
         	
-        	setcookie('location_address_id', $address_id, RC_Time::gmtime() + 3600 * 24 * 7);
+        	setcookie('location_address_id', $address_id, time() + 1800);
         	$params = array('token' => ecjia_touch_user::singleton()->getToken(), 'address_id' => $address_id);
         	$address_info = ecjia_touch_manager::make()->api(ecjia_touch_api::ADDRESS_INFO)->data($params)->run();
         	
         	if (!is_ecjia_error($address_info)) {
-        	    setcookie('location_name', $address_info['address'], RC_Time::gmtime() + 3600 * 24 * 7);
-        	    setcookie('location_address', $address_info['address_info'], RC_Time::gmtime() + 3600 * 24 * 7);
-        	    setcookie('longitude', $address_info['location']['longitude'], RC_Time::gmtime() + 3600 * 24 * 7);
-        	    setcookie('latitude', $address_info['location']['latitude'], RC_Time::gmtime() + 3600 * 24 * 7);
+        	    setcookie('location_name', $address_info['address'], time() + 1800);
+        	    setcookie('location_address', $address_info['address_info'], time() + 1800);
+        	    setcookie('longitude', $address_info['location']['longitude'], time() + 1800);
+        	    setcookie('latitude', $address_info['location']['latitude'], time() + 1800);
         	    
-        	    setcookie("city_id", $address_info['city'], RC_Time::gmtime() + 3600 * 24 * 7);
-        	    setcookie("city_name", $address_info['city_name'], RC_Time::gmtime() + 3600 * 24 * 7);
+        	    setcookie("city_id", $address_info['city'], time() + 1800);
+        	    setcookie("city_name", $address_info['city_name'], time() + 1800);
         	}
         } else {
         	$pjax_url = RC_Uri::url('user/address/address_list');
@@ -324,9 +336,10 @@ class user_address_controller {
         $temp_data = user_address_controller::save_temp_data(1, $temp_key, $_GET['clear'], $_GET);
         $params = array('token' => ecjia_touch_user::singleton()->getToken(), 'address_id' => $id);
         $info = ecjia_touch_manager::make()->api(ecjia_touch_api::ADDRESS_INFO)->data($params)->run();
+
         $info = is_ecjia_error($info) ? array() : $info;
         
-        $location_backurl = urlencode(RC_Uri::url('user/address/edit_address', array('id' => $id)));
+        $location_backurl = urlencode(RC_Uri::url('user/address/edit_address', array('id' => $id, 'clear' => 0)));
         ecjia_front::$controller->assign('location_backurl', $location_backurl);
         
         $referer_url = !empty($_GET['referer_url']) ? urlencode($_GET['referer_url']) : (!empty($_SESSION['referer_url']) ? $_SESSION['referer_url'] : '');
@@ -334,6 +347,14 @@ class user_address_controller {
             $_SESSION['referer_url'] = $referer_url;
             ecjia_front::$controller->assign('referer_url', $referer_url);
         }
+
+        $clear = !empty($_GET['clear']) ? intval($_GET['clear']) : 0;
+    	if ($clear == 1) {
+    		ecjia_front::$controller->assign('clear', $clear);
+    	}
+
+    	$region_data = user_function::get_region_list($info['province'], $info['city'], $info['district']);
+        ecjia_front::$controller->assign('region_data', $region_data);
         
         $key       = ecjia::config('map_qq_key');
         $referer   = ecjia::config('map_qq_referer');
@@ -356,13 +377,14 @@ class user_address_controller {
         	$store_id = $_SESSION['order_address_temp']['store_id'];
         	$addr = !empty($_GET['addr']) ? $_COOKIE['city_name'].trim($_GET['addr']) : $_COOKIE['location_address'];
         
-        	$key = ecjia_config::has('map_baidu_key') ? ecjia::config('map_baidu_key') : '';
+        	$key = ecjia_config::has('map_qq_key') ? ecjia::config('map_qq_key') : '';
         	if (!empty($key)) {
-        		$shop_point = file_get_contents("https://api.map.baidu.com/geocoder/v2/?address=$addr&output=json&ak=$key");
-        		$shop_point = json_decode($shop_point, true);
-        		 
-        		$address['longitude']	= $shop_point['result']['location']['lng'];
-        		$address['latitude']	= $shop_point['result']['location']['lat'];
+                $addr = urlencode($addr);
+                $shop_point = RC_Http::remote_get("https://apis.map.qq.com/ws/geocoder/v1/?address=".$addr."&key=".$key);
+                $shop_point = json_decode($shop_point['body'], true);
+                $location   = (array)$shop_point['result']['location'];
+                $address['longitude'] = $location['lng'];
+                $address['latitude'] = $location['lat'];
         		 
         		$param = array('address' => array('latitude' => $address['latitude'], 'longitude' => $address['longitude']), 'store_id' => $store_id);
         		$local = RC_Api::api('user', 'neighbors_address_store', $param);
@@ -370,6 +392,7 @@ class user_address_controller {
         	}
         }
         ecjia_front::$controller->assign('local', $local);
+        ecjia_front::$controller->assign('get_region_url', RC_Uri::url('user/address/get_region'));
         
         ecjia_front::$controller->display('user_address_edit.dwt');
     }
@@ -382,20 +405,22 @@ class user_address_controller {
         if (empty($_POST['address_id'])) {
             return ecjia_front::$controller->showmessage('参数错误', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('pjaxurl' => ''));
         }
-        if (empty($_POST['city_id']) || empty($_POST['address']) || empty($_POST['consignee']) || empty($_POST['mobile'])) {
+        if (empty($_POST['province']) || empty($_POST['city']) || empty($_POST['district']) || empty($_POST['street']) || empty($_POST['address']) || empty($_POST['consignee']) || empty($_POST['mobile'])) {
             return ecjia_front::$controller->showmessage('请完整填写相关信息', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('pjaxurl' => ''));
         }
         $params = array(
             'token' 		=> ecjia_touch_user::singleton()->getToken(),
             'address_id' 	=> $_POST['address_id'],
             'address' 		=> array(
-                'city'      	=> intval($_POST['city_id']),
+                'province'   	=> trim($_POST['province']),
+            	'city'   		=> trim($_POST['city']),
+            	'district'   	=> trim($_POST['district']),
+            	'street'   		=> trim($_POST['street']),
                 'address'   	=> htmlspecialchars($_POST['address']),
                 'address_info'	=> htmlspecialchars($_POST['address_info']),
                 'consignee' 	=> htmlspecialchars($_POST['consignee']),
                 'mobile'    	=> htmlspecialchars($_POST['mobile']),
             )
-             
         );
         $chars = "/^1(3|4|5|7|8)\d{9}$/";
         $mobile = $params['address']['mobile'];
@@ -404,7 +429,7 @@ class user_address_controller {
             return ecjia_front::$controller->showmessage(__('手机号码格式错误'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
         }
         $rs = ecjia_touch_manager::make()->api(ecjia_touch_api::ADDRESS_UPDATE)->data($params)->run();
-
+        
         if (is_ecjia_error($rs)) {
             return ecjia_front::$controller->showmessage($rs->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR,array('pjaxurl' => ''));
         }
@@ -518,50 +543,6 @@ class user_address_controller {
         ecjia_front::$controller->display('user_near_location.dwt');
     }
 
-    /**
-     * 获取指定地区的子级地区
-     */
-    public function get_region(){
-        $type      = !empty($_GET['type'])   ? intval($_GET['type'])   : 0;
-        $parent        = !empty($_GET['parent']) ? intval($_GET['parent']) : 0;
-        $arr['regions'] = ecjia_region::instance()->region_datas($type, $parent);
-        $arr['type']    = $type;
-        $arr['target']  = !empty($_GET['target']) ? stripslashes(trim($_GET['target'])) : '';
-        $arr['target']  = htmlspecialchars($arr['target']);
-        echo json_encode($arr);
-    }
-     /**
-     * 根据地区获取经纬度
-     */
-    public function getgeohash(){
-        $shop_province      = !empty($_REQUEST['province'])    ? intval($_REQUEST['province'])           : 0;
-        $shop_city          = !empty($_REQUEST['city'])        ? intval($_REQUEST['city'])               : 0;
-        $shop_district      = !empty($_REQUEST['district'])    ? intval($_REQUEST['district'])           : 0;
-        $shop_address       = !empty($_REQUEST['address'])     ? htmlspecialchars($_REQUEST['address'])  : 0;
-        if (empty($shop_province)) {
-            return $this->showmessage('请选择省份', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'province'));
-        }
-        if (empty($shop_city)) {
-            return $this->showmessage('请选择城市', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'city'));
-        }
-        if (empty($shop_district)) {
-            return $this->showmessage('请选择地区', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'district'));
-        }
-        if (empty($shop_address)) {
-            return $this->showmessage('请填写详细地址', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR, array('element' => 'address'));
-        }
-        $city_name = RC_DB::table('region')->where('region_id', $shop_city)->pluck('region_name');
-        $city_district = RC_DB::table('region')->where('region_id', $shop_district)->pluck('region_name');
-        $address = $city_name.'市'.$shop_address;
-        $key = ecjia::config('map_baidu_key');
-        
-        $shop_point = file_get_contents("https://api.map.baidu.com/geocoder/v2/?address=".$address."&output=json&ak=".$key);
-        $shop_point = (array)json_decode($shop_point);
-        $shop_point['result'] = (array)$shop_point['result'];
-        $location = (array)$shop_point['result']['location'];
-        echo json_encode($location);
-    }
-    
     public static function choose_address() {
     	$referer_url = !empty($_GET['referer_url']) ? urldecode($_GET['referer_url']) : RC_Uri::url('touch/index/init');
     	$address_id = !empty($_GET['address_id']) ? intval($_GET['address_id']) : 0;
@@ -570,16 +551,27 @@ class user_address_controller {
     	if (!empty($address_id) && $type != 'choose') {
     		$address_info = user_function::address_info(ecjia_touch_user::singleton()->getToken(), $address_id);
 
-    		setcookie('location_address_id', $address_id, RC_Time::gmtime() + 3600 * 24 * 7);
-    		setcookie('location_name', $address_info['address'], RC_Time::gmtime() + 3600 * 24 * 7);
-    		setcookie('location_address', $address_info['address_info'], RC_Time::gmtime() + 3600 * 24 * 7);
-    		setcookie('longitude', $address_info['location']['longitude'], RC_Time::gmtime() + 3600 * 24 * 7);
-    		setcookie('latitude', $address_info['location']['latitude'], RC_Time::gmtime() + 3600 * 24 * 7);
+    		setcookie('location_address_id', $address_id, time() + 1800);
+    		setcookie('location_name', $address_info['address'], time() + 1800);
+    		setcookie('location_address', $address_info['address_info'], time() + 1800);
+    		setcookie('longitude', $address_info['location']['longitude'], time() + 1800);
+    		setcookie('latitude', $address_info['location']['latitude'], time() + 1800);
     		
-    		setcookie("city_id", $address_info['city'], RC_Time::gmtime() + 3600 * 24 * 7);
-    		setcookie("city_name", $address_info['city_name'], RC_Time::gmtime() + 3600 * 24 * 7);
+    		setcookie("city_id", $address_info['city'], time() + 1800);
+    		setcookie("city_name", $address_info['city_name'], time() + 1800);
     	}
     	return ecjia_front::$controller->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => $referer_url));
+    }
+    
+    public static function get_region() {
+    	$province_id = !empty($_POST['province_id']) ? trim($_POST['province_id']) : '';
+    	$city_id = !empty($_POST['city_id']) ? trim($_POST['city_id']) : '';
+    	$district_id = !empty($_POST['district_id']) ? trim($_POST['district_id']) : '';
+
+    	if (!empty($province_id) || !empty($city_id) || !empty($district_id)) {
+    		$region_data = user_function::get_region_list($province_id, $city_id, $district_id);
+    		return ecjia_front::$controller->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, $region_data);
+    	}
     }
 }
 

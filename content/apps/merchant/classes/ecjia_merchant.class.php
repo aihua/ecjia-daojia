@@ -87,6 +87,7 @@ abstract class ecjia_merchant extends ecjia_base implements ecjia_template_filel
 		$this->public_route = array(
 		    'staff/privilege/login',
 		    'staff/privilege/signin',
+			'staff/privilege/autologin',
 		    'staff/get_password/forget_pwd',
 		    'staff/get_password/reset_pwd_mail',
 		    'staff/get_password/reset_pwd_form',
@@ -99,15 +100,14 @@ abstract class ecjia_merchant extends ecjia_base implements ecjia_template_filel
 			'staff/get_password/mobile_reset',
 			'staff/get_password/mobile_reset_pwd',
 		    'franchisee/merchant/init',
-		    'franchisee/merchant/init',
 		    'franchisee/merchant/get_code_value',
 		    'franchisee/merchant/insert',
 		    'franchisee/merchant/view',
 		    'franchisee/merchant/view_post',
 		    'franchisee/merchant/remove_apply',
 		    'franchisee/merchant/drop_file',
-		    'franchisee/merchant/get_region',
 			'franchisee/merchant/getgeohash',
+			'franchisee/merchant/get_region',
 			'merchant/merchant/shopinfo',
 		);
 		$this->public_route = RC_Hook::apply_filters('merchant_access_public_route', $this->public_route);
@@ -172,7 +172,8 @@ abstract class ecjia_merchant extends ecjia_base implements ecjia_template_filel
 		
 		//店铺导航背景图
 		$background_url = RC_DB::table('merchants_config')->where('store_id', $_SESSION['store_id'])->where('code', 'shop_nav_background')->pluck('value');
-		if (!empty($background_url) && file_exists(RC_Upload::upload_path($background_url))) {
+		$disk = RC_Filesystem::disk();
+		if (!empty($background_url) && $disk->exists(RC_Upload::upload_path($background_url))) {
 			$background_url = RC_Upload::upload_url($background_url);
 		}
 		$this->assign('background_url', $background_url);
@@ -409,10 +410,8 @@ abstract class ecjia_merchant extends ecjia_base implements ecjia_template_filel
 // 	    		break;
 // 	    	default:
 	    		$this->assign('page_state', array('icon' => 'glyphicon glyphicon-remove-circle', 'msg' => __('操作错误'), 'class' => 'ecjiafc-red'));
-// 	    }
-	    
+// 	    }   
 
-	        
         if (file_exists($system_tpl)) {
 	        $this->assign(array(
 	            'msg' => $msg,

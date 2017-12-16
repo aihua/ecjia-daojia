@@ -57,12 +57,15 @@ class refundConfirm_module extends api_admin implements api_interface {
         if ($_SESSION['admin_id'] <= 0 && $_SESSION['staff_id'] <= 0) {
 			return new ecjia_error(100, 'Invalid session');
 		}
-		
-		$result = $this->admin_priv('order_stats');
-		if (is_ecjia_error($result)) {
-			return $result;
+		$device = $this->device;
+		$codes = array('8001', '8011');
+		if (!in_array($device['code'], $codes)) {
+			$result = $this->admin_priv('order_stats');
+			if (is_ecjia_error($result)) {
+				return $result;
+			}
 		}
-
+		
 		$order_id = $this->requestData('order_id');
 		if (empty($order_id)) {
 		    return new ecjia_error(101, '参数错误');
@@ -74,22 +77,23 @@ class refundConfirm_module extends api_admin implements api_interface {
 			return new ecjia_error(13, '不存在的信息');
 		}
 		
-		$payment_method	= RC_Loader::load_app_class('payment_method', 'payment');
-		$pay_info = $payment_method->payment_info_by_id($order['pay_id']);
-		$payment = $payment_method->get_payment_instance($pay_info['pay_code']);
+		$payment_method	= new Ecjia\App\Payment\PaymentPlugin();
+		$pay_info = $payment_method->getPluginDataById($order['pay_id']);
+// 		$payment_handler = $payment_method->get_payment_instance($pay_info['pay_code']);
+		$payment_handler = $payment_method->channel($pay_info['pay_code']);
 		
 		/* 判断是否有支付方式以及是否为现金支付和酷银*/
-		if (!$payment) {
+		if (!$payment_handler) {
 			return new ecjia_error(8, '处理失败');
 		}
-		$payment->set_orderinfo($order);
+		$payment_handler->set_orderinfo($order);
 		
 		if ($pay_info['pay_code'] == 'pay_cash') {
 			$pay_priv = $this->admin_priv('order_ps_edit');
 			if (is_ecjia_error($pay_priv)) {
 				return $pay_priv;
 			}
-			$result = $payment->refund();
+			$result = $payment_handler->refund();
 			if (is_ecjia_error($result)) {
 				return $result;
 			} else {
@@ -110,7 +114,7 @@ class refundConfirm_module extends api_admin implements api_interface {
 		}
 		
 		if ($pay_info['pay_code'] == 'pay_koolyun') {
-			$result = $payment->refund();
+			$result = $payment_handler->refund();
 			if (is_ecjia_error($result)) {
 				return $result;
 			} else {

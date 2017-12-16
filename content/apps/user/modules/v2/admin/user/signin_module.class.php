@@ -57,7 +57,7 @@ class signin_module extends api_admin implements api_interface {
 		$username	= $this->requestData('username');
 		$password	= $this->requestData('password');
 		$device		= $this->device;
-
+		//$device = array('code'=> '8001', 'udid' => 'bdc0525eebad246de659a7d0ac39fe834d198c5f', 'client' => 'android');
 		if (empty($username) || empty($password)) {
 			$result = new ecjia_error('login_error', __('您输入的帐号信息不正确'));
 			return $result;
@@ -81,15 +81,15 @@ class signin_module extends api_admin implements api_interface {
 
 function signin_merchant($username, $password, $device) {
     /* 收银台请求判断处理*/
-    if (!empty($device) && is_array($device) && $device['code'] == '8001') {
-        $adviser_info = RC_Model::model('achievement/adviser_model')->find(array('username' => $username));
-        if (empty($adviser_info)) {
+	$codes = array('8001', '8011');
+    if (!empty($device) && is_array($device) && in_array($device['code'], $codes)) {
+    	$staff_user_info = RC_DB::table('staff_user')->where('mobile', $username)->first();
+        if (empty($staff_user_info)) {
 			$result = new ecjia_error('login_error', __('您输入的帐号信息不正确'));
 			return $result;
         }
-        $admin_info = RC_DB::table('staff_user')->where('user_id', $adviser_info['admin_id'])->first();
-        $username	= $admin_info['mobile'];
-        $salt	    = $admin_info['salt'];
+        $username	= $staff_user_info['mobile'];
+        $salt	    = $staff_user_info['salt'];
     } else {
         $salt = RC_DB::table('staff_user')->where('mobile', $username)->pluck('salt');
     }
@@ -140,14 +140,14 @@ function signin_merchant($username, $password, $device) {
         $_SESSION['last_ip']	    = $row['last_ip'];
         
         /* 获取device_id*/
-        $device_id = RC_Model::model('mobile/mobile_device_model')->where(array('device_udid' => $device['udid'], 'device_client' => $device['client'], 'device_code' => $device['code']))->get_field('id');
-        $_SESSION['device_id']	    = $row['device_id'];
-         
-        if ($device['code'] == '8001') {
-            $_SESSION['adviser_id']	= $row['user_id'];
-            $_SESSION['admin_name']	= $row['mobile'];
-        }
-         
+        $device_id = RC_DB::table('mobile_device')
+        				->where('device_udid', $device['udid'])
+        				->where('device_client', $device['client'])
+        				->where('device_code', $device['code'])
+        				->pluck('id');
+        
+        $_SESSION['device_id'] = $device_id;
+       
         if (empty($row['salt'])) {
             $salt = rand(1, 9999);
             $new_possword = md5(md5($password) . $salt);
@@ -167,11 +167,11 @@ function signin_merchant($username, $password, $device) {
             'last_ip'		=> RC_Ip::client_ip(),
         );
         RC_DB::table('staff_user')->where('user_id', $_SESSION['staff_id'])->update($data);
-    
+    	
         $out = array(
             'session' => array(
                 'sid' => RC_Session::session_id(),
-                'uid' => $_SESSION['admin_id']
+                'uid' => $_SESSION['staff_id']
             ),
         );
         $role_name = $group = '';
@@ -180,14 +180,21 @@ function signin_merchant($username, $password, $device) {
         	case -1 : 
         		$role_name	= "配送员";
         		$group		= 'express';
+        		$role_type = 'express_user';
+        		break;
+        	case -2 :
+        		$role_name	= "收银员";
+        		$group		= 'cashier';
+        		$role_type  = 'cashier';
         		break;
         	default:
         		if ($row['group_id'] > 0) {
         			$role_name = RC_DB::table('staff_group')->where('group_id', $row['group_id'])->pluck('group_name');
         		}
+        		$role_type = '';
         		break;
         }
-
+		
         /* 登入后默认设置离开状态*/
         if ($row['online_status'] != 4 && $group == 'express') {
         	RC_DB::table('staff_user')->where('user_id', $_SESSION['staff_id'])->update(array('online_status' => 4));
@@ -203,22 +210,19 @@ function signin_merchant($username, $password, $device) {
         }
         
         $out['userinfo'] = array(
+        	'seller_id'		=> $row['store_id'],
             'id' 			=> $row['user_id'],
-            'username'		=> $row['mobile'],
+            'username'		=> $row['name'],
+        	'mobile'		=> $row['mobile'],
             'email'			=> $row['email'],
             'last_login' 	=> RC_Time::local_date(ecjia::config('time_format'), $row['last_login']),
             'last_ip'		=> RC_Ip::area($row['last_ip']),
             'role_name'		=> $role_name,
-            'role_type'		=> $row['group_id'] == -1 ? 'express_user' : '',
+            'role_type'		=> $role_type,
         	'group'			=> $group,
-            'avator_img'	=> !empty($row['avatar']) ? RC_Upload::upload_url($row['avatar']) : null,
+            'avator_img'	=> !empty($row['avatar']) ? RC_Upload::upload_url($row['avatar']) : '',
         );
-        
-        if ($device['code'] == '8001') {
-            $out['userinfo']['username'] = $adviser_info['username'];
-            $out['userinfo']['email']	 = $adviser_info['email'];
-        }
-        
+                
         //修正关联设备号
         $result = ecjia_app::validate_application('mobile');
         if (!is_ecjia_error($result)) {
@@ -259,7 +263,8 @@ function signin_admin($username, $password, $device) {
     }
     
     /* 收银台请求判断处理*/
-    if (!empty($device) && is_array($device) && $device['code'] == '8001') {
+    $codes = array('8001', '8011');
+    if (!empty($device) && is_array($device) && in_array($device['code'], $codes)) {
         $adviser_info = RC_Model::model('achievement/adviser_model')->find(array('username' => $username));
         if (empty($adviser_info)) {
             $result = new ecjia_error('login_error', __('您输入的帐号信息不正确'));
@@ -302,7 +307,7 @@ function signin_admin($username, $password, $device) {
         $device_id = RC_Model::model('mobile/mobile_device_model')->where(array('device_udid' => $device['udid'], 'device_client' => $device['client'], 'device_code' => $device['code']))->get_field('id');
         $_SESSION['device_id']	    = $row['device_id'];
     
-        	
+        //TODO
         if ($device['code'] == '8001') {
             $_SESSION['adviser_id']	= $row['id'];
             $_SESSION['admin_name']	= $row['username'];
@@ -348,7 +353,7 @@ function signin_admin($username, $password, $device) {
             'avator_img'	=> RC_Uri::admin_url('statics/images/admin_avatar.png'),
         );
         	
-        if ($device['code'] == '8001') {
+        if (in_array($device['code'], $codes)) {
             $out['userinfo']['username'] = $adviser_info['username'];
             $out['userinfo']['email']	 = $adviser_info['email'];
         }

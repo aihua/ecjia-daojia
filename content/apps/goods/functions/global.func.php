@@ -62,7 +62,7 @@ function assign_adminlog_content() {
  *  @param string $code 接收图片参数
  *  @param string $old_images 旧图片
  */
-function file_upload_info($path, $code, $old_images)
+function goods_file_upload_info($path, $code, $old_images)
 {
     $code = empty($code) ? $path : $code;
     $upload = RC_Upload::uploader('image', array('save_path' => 'merchant/' . $_SESSION['store_id'] . '/data/' . $path, 'auto_sub_dirs' => true));
@@ -465,21 +465,58 @@ function brand_get_goods($brand_id, $cate, $size, $page, $sort, $order) {
 * @return  array
 */
 function brand_related_cat($brand) {
-	$db = RC_Model::model('goods/category_viewmodel');
+	// $db = RC_Model::model('goods/category_viewmodel');
+	// $arr[] = array(
+	// 	'cat_id' 	=> 0,
+	// 	'cat_name'	=> RC_Lang::get('goods::goods.all_category'),
+	// 	'url'		=> build_uri('brand', array('bid' => $brand), RC_Lang::get('goods::goods.all_category'))
+	// );
+	// $data = $db->join('goods')->where(array('g.brand_id' => $brand))->group('g.cat_id')->select();
+	// if(!empty($data)) {
+	// 	foreach ($data as $row) {
+	// 		$row['url'] = build_uri('brand', array('cid' => $row['cat_id'], 'bid' => $brand), $row['cat_name']);
+	// 		$arr[] = $row;
+	// 	}
+	// }
+
 	$arr[] = array(
 		'cat_id' 	=> 0,
 		'cat_name'	=> RC_Lang::get('goods::goods.all_category'),
 		'url'		=> build_uri('brand', array('bid' => $brand), RC_Lang::get('goods::goods.all_category'))
 	);
-	$data = $db->join('goods')->where(array('g.brand_id' => $brand))->group('g.cat_id')->select();
-	if(!empty($data)) {
-		foreach ($data as $row) {
-			$row['url'] = build_uri('brand', array('cid' => $row['cat_id'], 'bid' => $brand), $row['cat_name']);
-			$arr[] = $row;
+	
+	//商品信息
+	$data = RC_DB::table('goods')->where('brand_id', $brand)->groupBy('cat_id')->get();
+	if (!empty($data)) {
+		foreach ($data as $k => $v) {
+			$data[$v['cat_id']] = $v;
+		}
+	}
+	
+	$cat_list = array();
+	if (!empty($data)) {
+		foreach ($data as $k => $v) {
+			$cat_list[] = $v['cat_id'];
+		}
+	}
+	
+	$db_category = RC_DB::table('category');
+	if (!empty($cat_list)) {
+		$db_category->whereIn('cat_id', $cat_list);
+	}
+	//分类列表
+	$cat_temp_list = $db_category->get();
+	if (!empty($cat_temp_list)) {
+		foreach ($cat_temp_list as $k => $row) {
+			$cat_temp_list[$k] = array_merge($row, $data[$row['cat_id']]);
+			
+			$cat_temp_list[$k]['url'] = build_uri('brand', array('cid' => $row['cat_id'], 'bid' => $brand), $row['cat_name']);
+			$arr[] = $cat_temp_list[$k];
 		}
 	}
 	return $arr;
 }
+
 /*------------------------------------------------------ */
 //-- END PRIVATE FUNCTION品牌表的方法结束
 /*------------------------------------------------------ */
@@ -1767,7 +1804,7 @@ function is_spec($goods_attr_id_array, $sort = 'asc') {
  *
  * @return 商品最终购买价格
  */
-function get_final_price($goods_id, $goods_num = '1', $is_spec_price = false, $spec = array(), $warehouse_id = 0, $area_id = 0) {
+function get_final_price($goods_id, $goods_num = '1', $is_spec_price = false, $spec = array()) {
 	$dbview = RC_Model::model('goods/sys_goods_member_viewmodel');
 	RC_Loader::load_app_func('admin_goods', 'goods');
 
@@ -1787,7 +1824,11 @@ function get_final_price($goods_id, $goods_num = '1', $is_spec_price = false, $s
 		}
 	}
 	// 取得商品促销价格列表
-	$goods = $dbview->join ( 'member_price' )->find (array('g.goods_id' => $goods_id, 'g.is_delete' => 0));
+	//$goods = $dbview->join ('member_price')->find (array('g.goods_id' => $goods_id, 'g.is_delete' => 0));
+	$field = "g.promote_price, g.promote_start_date, g.promote_end_date,IFNULL(mp.user_price, g.shop_price * '" . $_SESSION['discount'] . "') AS shop_price";
+	// 取得商品促销价格列表
+	$goods = $dbview->join(array('member_price'))->field($field)->where(array('g.goods_id' => $goods_id, 'g.is_delete' => 0))->find();
+	
 	/* 计算商品的促销价格 */
 	if ($goods ['promote_price'] > 0) {
 		$promote_price = bargain_price ( $goods ['promote_price'], $goods ['promote_start_date'], $goods ['promote_end_date'] );
@@ -1940,22 +1981,25 @@ function get_package_goods($package_id) {
 }
 
 /**
- * 获取审核状态
+ * 获取审核状态 1未审核 2审核未通过 3审核已通过 5无需审核
  */
 function get_review_status($store_id) {
-    $review_status = 1;
+	$review_status = 1; //默认未审核
+	
+	//商店设置->基本设置中 商家审核关闭 则所有商家商品无需审核
     if (ecjia::config('review_goods') == 0) {
         $review_status = 5;
     } else {
         if (isset($store_id) && $store_id > 0) {
+        	$manage_mode = RC_DB::table('store_franchisee')->where('store_id', $store_id)->pluck('manage_mode');
+        	if ($manage_mode == 'self') {
+        		$review_status = 5;
+        	}
             $shop_review_goods = RC_DB::table('merchants_config')->where('store_id', $store_id)->where('code', 'shop_review_goods')->pluck('value');
-            if ($shop_review_goods == 0) {
-                $review_status = 5;
-            } else {
-                $review_status = 0;
+            //单个商店开启了审核商品 则默认为未审核
+            if ($shop_review_goods == 1) {
+                $review_status = 1;
             }
-        } else {
-            $review_status = 5;
         }
     }
     return $review_status;
@@ -1978,6 +2022,13 @@ function get_goods_gallery_gol($goods_id) {
         $row [$key] ['thumb_url'] = get_image_path ( $goods_id, $gallery_img ['thumb_url'], true, 'gallery' );
     }
     return $row;
+}
+
+function formated_price_bulk($price) {
+    //格式化散装商品价格
+    $price = sprintf("%.1f", $price);
+    $price = sprintf("%01.2f",$price);
+    return $price;
 }
 
 // end

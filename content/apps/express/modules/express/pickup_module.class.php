@@ -80,6 +80,8 @@ class pickup_module extends api_admin implements api_interface {
     	$where = array('staff_id' => $_SESSION['staff_id'], 'delivery_sn' => $delivery_sn);
     	RC_Model::model('express/express_order_model')->where($where)->update(array('status' => 2, 'express_time' => RC_Time::gmtime()));
     	
+    	
+    	//消息通知
     	$express_order = array(
     		'express_id'	        => $express_order_info['express_id'],
     		'express_sn'	        => $express_order_info['express_sn'],
@@ -143,29 +145,70 @@ class pickup_module extends api_admin implements api_interface {
 	    	'add_time'		=> RC_Time::gmtime(),
     	));
     	
-    	/* 新增通知*/
+    	/*当订单配送方式为o2o速递时,记录o2o速递物流信息*/
+    	$order_info = RC_DB::table('order_info')->where('order_id', $express_order_info['order_id'])->first();
+    	if ($order_info['shipping_id'] > 0) {
+//     		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+    		$shipping_info = ecjia_shipping::pluginData($order_info['shipping_id']);
+    		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
+    			$data = array(
+    				'express_code' => $shipping_info['shipping_code'],
+    				'track_number' => $order_info['invoice_no'],
+    				'time'		   => RC_Time::local_date(ecjia::config('time_format'), RC_Time::gmtime()),
+    				'context'	   => '配送员已取货，正在向您奔去，配送员：'.$_SESSION['staff_name'],
+    			);
+    			RC_DB::table('express_track_record')->insert($data);
+    		}
+    	}
+
     	$orm_staff_user_db = RC_Model::model('express/orm_staff_user_model');
     	$user              = $orm_staff_user_db->find($_SESSION['staff_id']);
     	$express_pickup    = new ExpressPickup($express_data);
-    	
     	RC_Notification::send($user, $express_pickup);
     	
     	/*推送消息*/
-    	$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $_SESSION['staff_id']));
-    	if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-    		$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'express_pickup', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
-    		if (!empty($push_event)) {
-    			RC_Loader::load_app_class('push_send', 'push', false);
-    			ecjia_admin::$controller->assign('express_info', $express_order_info);
-    			$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
+//     	$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $_SESSION['staff_id']));
+//     	if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
+//     		$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'express_pickup', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
+//     		if (!empty($push_event)) {
+//     			RC_Loader::load_app_class('push_send', 'push', false);
+//     			ecjia_admin::$controller->assign('express_info', $express_order_info);
+//     			$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
     	
-    			if ($devic_info['device_client'] == 'android') {
-    				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-    			} elseif ($devic_info['device_client'] == 'iphone') {
-    				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-    			}
-    		}
+//     			if ($devic_info['device_client'] == 'android') {
+//     				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+//     			} elseif ($devic_info['device_client'] == 'iphone') {
+//     				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+//     			}
+//     		}
+//     	}
+
+    	//新的推送消息方法
+    	$options = array(
+    		'user_id'   => $_SESSION['staff_id'],
+    		'user_type' => 'merchant',
+    		'event'     => 'express_pickup',
+    		'value' => array(
+    			'express_sn'=> $express_order_info['express_sn'],
+    		),
+    		'field' => array(
+    			'open_type' => 'admin_message',
+    		),
+    	);
+    	RC_Api::api('push', 'push_event_send', $options);
+    	
+    	//短信发送
+    	if (!empty($express_order_info['express_mobile'])) {
+    		$options = array(
+    				'mobile' => $express_order_info['express_mobile'],
+    				'event'	 => 'sms_express_pickup',
+    				'value'  =>array(
+    						'express_sn'   => $express_order_info['express_sn'],
+    				),
+    		);
+    		RC_Api::api('sms', 'send_event_sms', $options);
     	}
+    	
 		return $express_order;
 	 }	
 }

@@ -128,7 +128,7 @@ class goods_list {
 				'on' 	=> "mp.goods_id = g.goods_id and mp.user_rank = '".$_SESSION['user_rank']."'"
 			)
 		);
-		$field = "g.goods_id, g.goods_name, g.store_id, g.goods_name_style, g.market_price,
+		$field = "g.goods_id, g.goods_name, g.goods_sn, g.store_id, g.goods_name_style, g.market_price,
 				  g.is_new, g.is_best, g.is_hot, g.shop_price AS org_price, 
 				  IFNULL(mp.user_price, g.shop_price * ".$_SESSION['discount'].") AS shop_price, 
 				  g.promote_price, g.goods_type, g.promote_start_date, g.promote_end_date,
@@ -181,10 +181,22 @@ class goods_list {
 		
 		/* 城市id */
 		if (isset($filter['city_id'])) {
-			$where['sf.city'] = $filter['city_id'];
-			$cache_key .= '-city-' . $filter['city_id'];
+			$length = strlen($filter['city_id']);
+			if ($length == 4) {
+				$where['sf.province'] = $filter['city_id'];
+				$cache_key .= '-province-' . $filter['city_id'];
+			} elseif ($length == 6) {
+				$where['sf.city'] = $filter['city_id'];
+				$cache_key .= '-city-' . $filter['city_id'];
+			} elseif ($length == 8) {
+				$where['sf.district'] = $filter['city_id'];
+				$cache_key .= '-district-' . $filter['city_id'];
+			} elseif ($length == 11) {
+				$where['sf.street'] = $filter['city_id'];
+				$cache_key .= '-street-' . $filter['city_id'];
+			}
 		}
-		
+
 		if (isset($filter['merchant_cat_id']) && !empty($filter['merchant_cat_id']) && isset($filter['store_id']) && !empty($filter['store_id']) ) {
 		    $merchant_cat_list = RC_DB::table('merchants_category')
 		    	->selectRaw('cat_id')
@@ -358,6 +370,7 @@ class goods_list {
 			
 					$arr[$key]['goods_id']		= $row['goods_id'];
 					$arr[$key]['name']			= $row['goods_name'];
+					$arr[$key]['goods_sn']		= $row['goods_sn'];
 					$arr[$key]['goods_brief'] 	= $row['goods_brief'];
 					$arr[$key]['store_id']		= $row['store_id'];
 					$arr[$key]['store_name']	= $row['merchants_name'];

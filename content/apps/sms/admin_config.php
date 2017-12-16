@@ -87,7 +87,7 @@ class admin_config extends ecjia_admin {
 			'<p>' . __('<a href="https://ecjia.com/wiki/帮助:ECJia智能后台:短信配置" target="_blank">'. RC_Lang::get('sms::sms.about_sms_config') .'</a>') . '</p>'
 		);
 		
-		$this->assign('ur_here', RC_Lang::get('sms::sms.sms_config'));
+		$this->assign('ur_here', '短信通知');
 		
 	    $this->assign('config_mobile',		 ecjia::config('sms_shop_mobile'));//商家电话
 		$this->assign('current_code', 'sms');

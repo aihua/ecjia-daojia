@@ -49,8 +49,10 @@ namespace Ecjia\App\Mobile\Qrcode;
 use RC_File;
 use RC_QrCode;
 use RC_Upload;
+use RC_Storage;
+use Royalcms\Component\Foundation\Object;
 
-abstract class AbstractQrcode 
+abstract class AbstractQrcode extends Object
 {
     
     /**
@@ -72,11 +74,11 @@ abstract class AbstractQrcode
         $this->id = $id;
         $this->logo = $logo;
     
-        if (! is_dir($this->storeDir())) {
-            RC_File::makeDirectory($this->storeDir(), 0777, true);
+        if (! RC_Storage::disk()->is_dir($this->storeDir())) {
+            RC_Storage::disk()->mkdir($this->storeDir(), FS_CHMOD_DIR);
         }
     
-        if (! RC_File::exists($this->getQrcodePath())) {
+        if (! RC_Storage::disk()->exists($this->getQrcodePath())) {
             $this->createQrcode();
         }
     }
@@ -93,16 +95,17 @@ abstract class AbstractQrcode
     
     /**
      * 二维码生成文件名
+     * @param 生成的二维码大小，默认430px
      */
-    abstract public function fileName();
+    abstract public function fileName($size = 430);
     
     /**
      * 移除二维码
      */
-    public function removeQrcode()
+    public function removeQrcode($size = 430)
     {
-        if (RC_File::exists($this->getQrcodePath()))
-            return RC_File::delete($this->getQrcodePath());
+        if (RC_Storage::disk()->exists($this->getQrcodePath($size)))
+            return RC_Storage::disk()->delete($this->getQrcodePath($size));
     }
     
     /**
@@ -111,28 +114,53 @@ abstract class AbstractQrcode
      */
     public function createQrcode($size = 430)
     {
+        $tempPath = $this->getTempPath();
+
         RC_QrCode::format('png')->size($size)->margin(1)
                     ->merge($this->logo, 0.2, true)
                     ->errorCorrection('H')
-                    ->generate($this->content(), $this->getQrcodePath());
+                    ->generate($this->content(), $tempPath);
+                    
+        //上传临时文件到指定目录            
+        RC_Storage::disk()->move($tempPath, $this->getQrcodePath($size), true, FS_CHMOD_FILE);
+
+        //删除临时文件
+        RC_File::delete($tempPath);
+        
+        return $this;
     }
     
     /**
      * 获取二维码Url
      * @return string
      */
-    public function getQrcodeUrl()
+    public function getQrcodeUrl($size = 430)
     {
-         return RC_Upload::upload_url() . str_replace(RC_Upload::upload_path(), '/', $this->storeDir()) . $this->fileName();
+         return RC_Upload::upload_url() . str_replace(RC_Upload::upload_path(), '/', $this->storeDir()) . $this->fileName($size);
     }
     
     /**
      * 获取二维码文件路径
      * @return string
      */
-    public function getQrcodePath()
+    public function getQrcodePath($size = 430)
     {
-        return $this->storeDir() . $this->fileName();
+        return $this->storeDir() . $this->fileName($size);
+    }
+    
+    /**
+     * 生成临时文件路径
+     * @return string
+     */
+    public function getTempPath()
+    {
+        $tempDir = storage_path() . '/temp/qrcodes/';
+        if (!RC_File::exists($tempDir)) {
+            RC_File::makeDirectory($tempDir, 0777, true);
+        }
+        
+        $tmpfname = tempnam($tempDir, 'qrcode_');
+        return $tmpfname;
     }
     
 }

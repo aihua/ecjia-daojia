@@ -68,7 +68,14 @@ class admin_template extends ecjia_admin {
 		RC_Script::enqueue_script('jquery-form');
 		RC_Script::enqueue_script('smoke');
 		
+		RC_Script::enqueue_script('jquery.toggle.buttons', RC_Uri::admin_url('statics/lib/toggle_buttons/jquery.toggle.buttons.js'));
+		RC_Style::enqueue_style('bootstrap-toggle-buttons', RC_Uri::admin_url('statics/lib/toggle_buttons/bootstrap-toggle-buttons.css'));
+		RC_Script::enqueue_script('bootstrap-editable.min', RC_Uri::admin_url('statics/lib/x-editable/bootstrap-editable/js/bootstrap-editable.min.js'));
+		RC_Style::enqueue_style('bootstrap-editable', RC_Uri::admin_url('statics/lib/x-editable/bootstrap-editable/css/bootstrap-editable.css'));
+		RC_Script::enqueue_script('bootstrap-placeholder');
 		RC_Script::enqueue_script('jquery-dataTables-bootstrap');
+		
+		RC_Script::enqueue_script('sms_events', RC_App::apps_url('statics/js/sms_events.js', __FILE__), array(), false, false);
 		RC_Script::enqueue_script('sms_template', RC_App::apps_url('statics/js/sms_template.js', __FILE__), array(), false, false);
 		RC_Script::localize_script('sms_template', 'js_lang', RC_Lang::get('sms::sms.js_lang'));
 		
@@ -80,22 +87,11 @@ class admin_template extends ecjia_admin {
 	 */
 	public function init () {
 		$this->admin_priv('sms_template_manage');
-		
+
 		ecjia_screen::get_current_screen()->remove_last_nav_here();
 		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('sms::sms.sms_template')));
-		ecjia_screen::get_current_screen()->add_help_tab(array(
-			'id'		=> 'overview',
-			'title'		=> RC_Lang::get('sms::sms.overview'),
-			'content'	=> '<p>' . RC_Lang::get('sms::sms.sms_template_help') . '</p>'
-		));
-		
-		ecjia_screen::get_current_screen()->set_help_sidebar(
-			'<p><strong>' . RC_Lang::get('sms::sms.more_info') . '</strong></p>' .
-			'<p>' . __('<a href="https://ecjia.com/wiki/帮助:ECJia智能后台:短信模板" target="_blank">'. RC_Lang::get('sms::sms.about_sms_template') .'</a>') . '</p>'
-		);
 		$this->assign('ur_here', RC_Lang::get('sms::sms.sms_template_list'));
 		
-
 		$data = RC_DB::table('notification_channels')->where('channel_type', 'sms')->orderby('sort_order', 'asc')->get();
 		$this->assign('data', $data);
 		
@@ -112,10 +108,12 @@ class admin_template extends ecjia_admin {
 		->where('channel_code', $channel_code)
 		->orderby('id', 'desc')
 		->get();
+		
+		$this->assign('action_link', array('href'=>RC_Uri::url('sms/admin_template/add',array('channel_code' => $channel_code)), 'text' => RC_Lang::get('sms::sms.add_sms_template')));
+		$this->assign('action_link_event', array('href'=>RC_Uri::url('sms/admin_events/init'), 'text' => '短信事件列表'));
+		
 		$this->assign('template', $template);
 
-		$this->assign('action_link', array('href'=>RC_Uri::url('sms/admin_template/add',array('channel_code' => $channel_code)), 'text' => RC_Lang::get('sms::sms.add_sms_template')));
-		
 		$this->display('sms_template_list.dwt');
 	}
 
@@ -140,9 +138,9 @@ class admin_template extends ecjia_admin {
 		
 		$template_code_list = $this->template_code_list();
 		$existed = RC_DB::TABLE('notification_templates')->where('channel_code', $_GET['channel_code'])->select('template_code','template_subject')->get();
-		if(!empty($existed)) {
+		if (!empty($existed)) {
 			foreach ($existed as $value) {
-				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';;
+				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';
 			}
 			$res = array_diff($template_code_list,$existed_list);
 			unset($template_code_list);
@@ -154,10 +152,10 @@ class admin_template extends ecjia_admin {
 		$this->assign('channel_code', $channel_code);
 		
 		$handle = with(new Ecjia\App\Sms\SmsPlugin)->channel($channel_code);
-		if($handle->requiredTemplateId()){
+		if ($handle->requiredTemplateId()) {
 			$this->assign('templateid', 'templateid');
 		}
-		if($handle->requiredSignName()){
+		if ($handle->requiredSignName()) {
 			$this->assign('signname', 'signname');
 		}
 		
@@ -177,7 +175,7 @@ class admin_template extends ecjia_admin {
 
 	    $desc = [];
 	    $getValueHit = $event->getValueHit();
-	    if(!empty($getValueHit)){
+	    if (!empty($getValueHit)) {
 	    	$desc[] = '可用变量：'.$getValueHit;
 	    }
 	    $desc[] = '变量使用说明：变量不限位置摆放，可自由摆放，但变量不可自定义名称，需保持与以上名称一致。';
@@ -227,7 +225,10 @@ class admin_template extends ecjia_admin {
 		$id = RC_DB::table('notification_templates')->insertGetId($data);
 		
 		ecjia_admin::admin_log(sprintf(RC_Lang::get('sms::sms.template_code_is'), $template_code).'，'.sprintf(RC_Lang::get('sms::sms.template_subject_is'), $subject), 'add', 'sms_template');
-		return $this->showmessage('添加短信模板成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('sms/admin_template/edit', array('id' => $id, 'channel_code' => $channel_code, 'event_code' => $template_code))));
+		
+		$links[] = array('text' => '返回短信模板', 'href' => RC_Uri::url('sms/admin_template/init', array('channel_code' => $channel_code)));
+		$links[] = array('text' => '继续添加短信模板', 'href' => RC_Uri::url('sms/admin_template/add', array('channel_code' => $channel_code)));
+		return $this->showmessage('添加短信模板成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('links' => $links,'pjaxurl' => RC_Uri::url('sms/admin_template/edit', array('id' => $id, 'channel_code' => $channel_code, 'event_code' => $template_code))));
 	}
 	
 	/**
@@ -250,14 +251,12 @@ class admin_template extends ecjia_admin {
 		
 		$this->assign('ur_here', RC_Lang::get('sms::sms.edit_sms_template'));
 		$this->assign('action_link', array('href' => RC_Uri::url('sms/admin_template/init',array('channel_code'=>$_GET['channel_code'])), 'text' => RC_Lang::get('sms::sms.sms_template_list')));
-		
 
-		
 		$template_code_list = $this->template_code_list();
 		$existed = RC_DB::TABLE('notification_templates')->where('channel_code', $_GET['channel_code'])->where('template_code', '!=', $_GET['event_code'])->select('template_code','template_subject')->get();
-		if(!empty($existed)){
+		if (!empty($existed)) {
 			foreach ($existed as $value) {
-				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';;
+				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';
 			}
 			$res = array_diff($template_code_list, $existed_list);
 			$template_code_list = $res;
@@ -273,10 +272,10 @@ class admin_template extends ecjia_admin {
 		$this->assign('channel_code', $channel_code);
 		
 		$handle = with(new Ecjia\App\Sms\SmsPlugin)->channel($channel_code);
-		if($handle->requiredTemplateId()){
+		if ($handle->requiredTemplateId()) {
 			$this->assign('templateid', 'templateid');
 		}
-		if($handle->requiredSignName()){
+		if ($handle->requiredSignName()) {
 			$this->assign('signname', 'signname');
 		}
 		
@@ -285,7 +284,7 @@ class admin_template extends ecjia_admin {
 		
 		$desc = [];
 		$getValueHit = $event->getValueHit();
-		if(!empty($getValueHit)){
+		if (!empty($getValueHit)) {
 			$desc[] = '可用变量：'.$getValueHit;
 		}
 		$desc[] = '变量使用说明：变量不限位置摆放，可自由摆放，但变量不可自定义名称，需保持与以上名称一致。';
@@ -347,17 +346,13 @@ class admin_template extends ecjia_admin {
 		//判断渠道
 		$channel_code = trim($_GET['channel_code']);
 		$this->assign('channel_code', $channel_code);
-		$handle = with(new Ecjia\App\Sms\SmsPlugin)->channel($channel_code);
-		if($handle->requiredSignName()){
-			$this->assign('signname', 'signname');
-		}
 		
 		$id = intval($_GET['id']);
 		$data = RC_DB::table('notification_templates')->where('id', $id)->first();
 		
 		$template_content = $data['template_content'];
 		preg_match_all ("|{(.*)}|U", $template_content, $ok);
-		$variable =$ok[1];
+		$variable = $ok[1];
 		$this->assign('variable', $variable);
 		$this->assign('data', $data);
 
@@ -370,25 +365,24 @@ class admin_template extends ecjia_admin {
 	public function test_request() {
 		$this->admin_priv('sms_template_update');
 		$data = $_POST['data'];
-		foreach($data as $row){
-			if(empty($row)){
+		foreach ($data as $row) {
+			if (empty($row)) {
 				return $this->showmessage('模板变量不能为空', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 			}
 		}
 		
 		$options = array(
+			'channel'=> $_POST['channel_code'],
 			'mobile' => $_POST['mobile'],
 			'event'	 => $_POST['template_code'],
 			'value'  => $data,
 		);
-	
 		$response = RC_Api::api('sms', 'send_event_sms', $options);
 		if (is_ecjia_error($response)) {
 			return $this->showmessage($response->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-		}else{
+		} else {
 			return $this->showmessage('短信模板测试成功，请注意查收', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS);
 		}
-		
 	}
 	
 	

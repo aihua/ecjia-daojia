@@ -2474,12 +2474,16 @@ if ( ! function_exists('dd'))
     /**
      * Dump the passed variables and end the script.
      *
-     * @param  dynamic  mixed
+     * @param  mixed
      * @return void
      */
     function dd()
     {
-        array_map(function($x) { var_dump($x); }, func_get_args()); die;
+        array_map(function ($x) {
+            (new \Royalcms\Component\Support\Debug\Dumper)->dump($x);
+        }, func_get_args());
+
+        die(1);
     }
 }
 
@@ -3429,6 +3433,29 @@ if ( ! function_exists('array_sort'))
     function array_sort($array, Closure $callback)
     {
         return Royalcms\Component\Support\Collection::make($array)->sortBy($callback)->all();
+    }
+}
+
+if (! function_exists('array_has')) {
+    function array_has($array, $key)
+    {
+        if (empty($array) || is_null($key)) {
+            return false;
+        }
+
+        if (array_key_exists($key, $array)) {
+            return true;
+        }
+
+        foreach (explode('.', $key) as $segment) {
+            if (! is_array($array) || ! array_key_exists($segment, $array)) {
+                return false;
+            }
+
+            $array = $array[$segment];
+        }
+
+        return true;
     }
 }
 

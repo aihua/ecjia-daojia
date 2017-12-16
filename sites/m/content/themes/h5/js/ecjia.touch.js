@@ -5,7 +5,7 @@
 (function(ecjia, $) {
 	ecjia.touch = {
 		init: function() {
-			if ($.cookie('index') === undefined) {
+			if ($.cookie('h5_index') === undefined) {
 				var key = $("input[name='key']").val();
 				var referer = $("input[name='referer']").val();
 				var geolocation = new qq.maps.Geolocation(key, referer);
@@ -25,13 +25,12 @@
 						},
 					});
 				};
-
 				function showErr(err) {
 					console.log(err);
 				};
-				$.cookie('index', 'first', {
-					expires: 7
-				});
+				var date = new Date();
+				date.setTime(date.getTime() + (30 * 60 * 1000));
+				$.cookie('h5_index', 'first', {expires: date});
 			}
 
 			ecjia.touch.setpjax();
@@ -45,6 +44,8 @@
 			ecjia.touch.close_app_download();
 			ecjia.touch.search_header();
 			ecjia.touch.del_history();
+			ecjia.touch.share_spread();
+			ecjia.touch.copy_btn();
 
 			$("body").greenCheck();
 		},
@@ -116,27 +117,30 @@
 					var city_id = $('input[name="city_id"]').val();
 					var city_name = $('input[name="city_name"]').val();
 
+					var date = new Date();
+					date.setTime(date.getTime() + (30 * 60 * 1000));
+
 					$.cookie('location_address', address, {
-						expires: 7
+						expires: date
 					});
 					$.cookie('location_name', title, {
-						expires: 7
+						expires: date
 					});
 					$.cookie('longitude', lng, {
-						expires: 7
+						expires: date
 					});
 					$.cookie('latitude', lat, {
-						expires: 7
+						expires: date
 					});
 					$.cookie('location_address_id', 0, {
-						expires: 7
+						expires: date
 					});
 
 					$.cookie('city_id', city_id, {
-						expires: 7
+						expires: date
 					});
 					$.cookie('city_name', city_name, {
-						expires: 7
+						expires: date
 					});
 
 					var referer_url = $.cookie('referer_url');
@@ -160,7 +164,105 @@
 			}
 		},
 		//搜索关键词定位结束
+		
+		share_spread : function() {
+			var info = {
+    			'url' : window.location.href
+    		};
+			var url = $('input[name="spread_url"]').val();
+        	if (url != undefined) {
+        		return false;
+        	}
+			var wxconfig_url = $('input[name="wxconfig_url"]').val();
+        	if (wxconfig_url == undefined) {
+        		return false;
+        	}
+        	var desc = $('textarea[name="invite_template"]').val();
 
+        	$.post(wxconfig_url, info, function(response){
+        		if (response == '') {return false;}
+        		var data = response.data;
+        		if (data != undefined && data.appId != '') {
+	        		wx.config({
+	        			debug: false,
+	        			appId: data.appId,
+	        			timestamp: data.timestamp,
+	        			nonceStr: data.nonceStr,
+	        			signature: data.signature,
+	        			jsApiList: [
+	        				'checkJsApi',
+	        				'onMenuShareTimeline',
+	        				'onMenuShareAppMessage',
+	        				'onMenuShareQQ',
+	        				'hideOptionMenu',
+	        			]
+	        		});
+	        		wx.error(function(res){
+	        			console.log(res);
+	        		    // config信息验证失败会执行error函数，如签名过期导致验证失败，具体错误信息可以打开config的debug模式查看，也可以在返回的res参数中查看，对于SPA可以在这里更新签名。
+	        		});
+	        		var title = document.title;
+	        		var image = $('input[name="share_image"]').val();
+	        		var link = window.history.state != null ? window.history.state.url : window.location.href;
+	        		if (image == undefined) {
+	        			image = $.cookie('wap_logo');
+	        		}
+	        		var desc = link;
+	        		wx.ready(function () {
+	        			//分享到朋友圈
+	        			wx.onMenuShareTimeline({
+	        		        title: title, 					// 分享标题【必填】
+	        		        link: link, 					// 分享链接【必填】
+	        		        imgUrl: image, 					// 分享图标【必填】
+	        		        success: function () { 
+	        		            // 用户确认分享后执行的回调函数
+	        		        },
+	        		        cancel: function () { 
+	        		            // 用户取消分享后执行的回调函数
+	        		        }
+	        		    });
+	
+	        			//分享给朋友
+	        		    wx.onMenuShareAppMessage({
+	        		        title: title, 					// 分享标题【必填】
+	        		        desc: desc,	 					// 分享描述【必填】
+	        		        link: link, 					// 分享链接【必填】
+	        		        imgUrl: image, 					// 分享图标【必填】
+	        		        type: 'link', 					// 分享类型,music、video或link，不填默认为link【必填】
+	        		        dataUrl: '', 					// 如果type是music或video，则要提供数据链接，默认为空
+	        		        success: function () { 
+	        		            // 用户确认分享后执行的回调函数
+	        		        },
+	        		        cancel: function () { 
+	        		            // 用户取消分享后执行的回调函数
+	        		        }
+	        		    });
+	
+	        		    //分享到QQ
+	        		    wx.onMenuShareQQ({
+	        		        title: title, 					// 分享标题
+	        		        desc: desc, 					// 分享描述
+	        		        link: link, 					// 分享链接
+	        		        imgUrl: image, 					// 分享图标
+	        		        success: function () { 
+	        		           // 用户确认分享后执行的回调函数
+	        		        },
+	        		        cancel: function () { 
+	        		           // 用户取消分享后执行的回调函数
+	        		        }
+	        		    });
+	        		});	
+        		}
+        	});
+		},
+		
+		copy_btn : function() {
+			var clipboard = new Clipboard('.copy-btn');
+			clipboard.on('success', function(e) {  
+			        alert("订单号复制成功！");
+			});  
+		},
+		
 		/**
 		 * 设置PJAX
 		 */
@@ -571,7 +673,7 @@
 				obj_abter.append(obj_this);
 			});
 		},
-
+		
 		valid: function() {
 			var $ecjiaform = $(".ecjia-form");
 			$ecjiaform.length && $ecjiaform.each(function(index) {
@@ -706,17 +808,6 @@
 		return i;
 	};
 	
-	//微信浏览器后退pjax刷新
-	var ua = navigator.userAgent.toLowerCase();
-	if (ua.match(/MicroMessenger/i) == "micromessenger" || ua.match(/ECJiaBrowse/i) == "ecjiabrowse") {
-		window.addEventListener("popstate", function(e) { 
-			if (e.state.url != undefined) {
-				ecjia.pjax(e.state.url);
-				return false;
-			}
-		}, false); 
-	}
-
 	//PJAX跳转执行
 	$(document).on('pjax:complete', function() {
 		window.onscroll = null;
@@ -737,7 +828,7 @@
 	});
 
 	//PJAX前进、返回执行
-	$(document).on('pjax:popstate', function() {});
+//	$(document).on('pjax:popstate', function() {});
 
 	//PJAX历史和跳转都会执行的方法
 	$(document).on('pjax:end', function() {
@@ -762,6 +853,7 @@
 		ecjia.touch.region_change();
 		ecjia.touch.goods_detail.change();
 		ecjia.touch.index.init_swiper();
+		ecjia.touch.share_spread();
 
 		var ua = navigator.userAgent.toLowerCase();
 		if (ua.match(/MicroMessenger/i) == "micromessenger" || ua.match(/ECJiaBrowse/i) == "ecjiabrowse") {

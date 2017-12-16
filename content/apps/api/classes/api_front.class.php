@@ -64,8 +64,8 @@ abstract class api_front extends ecjia_api {
         
         $request = royalcms('request');
 		
-		$json = str_replace('\\', '', $request->input('json'));
-		$this->requestData = json_decode($json, true);
+		$json = $request->input('json');
+		$this->requestData = json_decode(rc_stripslashes($json), true);
 		
 		$this->token = $this->requestData('token') ? $this->requestData('token') : $this->requestData('session.sid');
 		
@@ -86,7 +86,7 @@ abstract class api_front extends ecjia_api {
 		});
 	
 		RC_Hook::add_filter('royalcms_session_id', function ($sessin_id) {
-			return RC_Hook::apply_filters('ecjia_api_session_id', '');
+			return RC_Hook::apply_filters('ecjia_api_session_id', $sessin_id);
 		});
 	
 		RC_Session::start();
@@ -112,7 +112,7 @@ abstract class api_front extends ecjia_api {
 			$input = explode('.', $key);
 			$request = royalcms('request');
 			$input_val = $request->input($input[0]);
-			if(isset($input_val)) {
+			if (isset($input_val)) {
 			    $this->requestData[$input[0]] = $request->input($input[0]);
 			}
 			return array_get($this->requestData, $key, $default);

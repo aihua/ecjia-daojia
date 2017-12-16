@@ -117,7 +117,7 @@ class admin_shortcut extends ecjia_admin {
 		$this->assign('city_list', $city_list);
 		
 		//获取当前城市ID
-		$city_id = $citymanage->getCurrentCity(intval($_GET['city_id']));
+		$city_id = $citymanage->getCurrentCity(trim($_GET['city_id']));
 		$this->assign('city_id', $city_id);
 
 		//获取菜单组
@@ -185,9 +185,9 @@ class admin_shortcut extends ecjia_admin {
     	$ad_height     = !empty($_POST['ad_height']) ? intval($_POST['ad_height']) : 0;
     	$max_number    = !empty($_POST['max_number']) ? intval($_POST['max_number']) : 0;
     	$sort_order    = !empty($_POST['sort_order']) ? intval($_POST['sort_order']) : 0;
-    	$city_id       = !empty($_POST['city_id']) ? intval($_POST['city_id']) : 0;
-    	$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-    	if(!$city_name){
+    	$city_id       = !empty($_POST['city_id']) ? trim($_POST['city_id']) : '';
+    	$city_name     = ecjia_region::getRegionName($city_id);
+    	if (!$city_name) {
     		$city_name = '默认';
     	}
     	$query = RC_DB::table('ad_position')->where('position_code', $position_code)->where('city_id', $city_id)->where('type', 'shortcut')->count();
@@ -241,9 +241,9 @@ class admin_shortcut extends ecjia_admin {
     	$position_name = !empty($_POST['position_name']) ? trim($_POST['position_name']) : '';
     	$position_code_value = !empty($_POST['position_code_value']) ? trim($_POST['position_code_value']) : '';
     	$position_code_ifnull = !empty($_POST['position_code_ifnull']) ? trim($_POST['position_code_ifnull']) : '';
-    	if(!empty($position_code_ifnull)){
+    	if (!empty($position_code_ifnull)) {
     		$position_code = $position_code_ifnull;
-    	}else{
+    	} else {
     		$position_code = $position_code_value;
     	}
     	
@@ -253,9 +253,9 @@ class admin_shortcut extends ecjia_admin {
     	$max_number    = !empty($_POST['max_number']) ? intval($_POST['max_number']) : 0;
     	$sort_order    = !empty($_POST['sort_order']) ? intval($_POST['sort_order']) : 0;
     	
-    	$city_id       = intval($_POST['city_id']);
-    	$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-    	if(!$city_name){
+    	$city_id       = trim($_POST['city_id']);
+    	$city_name     = ecjia_region::getRegionName($city_id);
+    	if (!$city_name) {
     		$city_name = '默认';
     	}
     	$position_id   = intval($_POST['position_id']);
@@ -286,16 +286,16 @@ class admin_shortcut extends ecjia_admin {
     	
     	$position_id = intval($_GET['position_id']);
     	$position_name = RC_DB::TABLE('ad_position')->where('position_id', $position_id)->pluck('position_name');
-    	$city_id = intval($_GET['city_id']);
+    	$city_id = trim($_GET['city_id']);
     	if (RC_DB::table('ad')->where('position_id', $position_id)->count() > 0) {
     		return $this->showmessage('该菜单组已存在快捷菜单，暂不能删除！', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
     	} else {
     		RC_DB::table('ad_position')->where('position_id', $position_id)->delete();
     		ecjia_admin::admin_log($position_name, 'remove', 'group_shortcut');
     		$count = RC_DB::TABLE('ad_position')->where('type', 'shortcut')->where('city_id', $city_id)->count();
-    		if(!$count){
+    		if (!$count) {
     			return $this->showmessage('成功删除菜单组', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS,array('pjaxurl' => RC_Uri::url('adsense/admin_shortcut/init')));
-    		}else{
+    		} else {
     			return $this->showmessage('成功删除菜单组', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS,array('pjaxurl' => RC_Uri::url('adsense/admin_shortcut/init',array('city_id' => $city_id))));
     		}
     	}
@@ -314,9 +314,9 @@ class admin_shortcut extends ecjia_admin {
     	$max_number    = intval($_GET['max_number']);
     	$sort_order    = intval($_GET['sort_order']);
 
-    	$city_id = intval($_GET['city_id']);
-    	$city_name     = RC_DB::TABLE('region')->where('region_id', $city_id)->pluck('region_name');
-    	if(!$city_name){
+    	$city_id = trim($_GET['city_id']);
+    	$city_name = ecjia_region::getRegionName($city_id);
+    	if (!$city_name) {
     		$city_name = '默认';
     	}
     	$position_id   = intval($_POST['position_id']);
@@ -347,8 +347,7 @@ class admin_shortcut extends ecjia_admin {
      * 获取热门城市
      */
     private function get_select_city() {
-    	$data = explode(',', ecjia::config('mobile_recommend_city'));
-    	$data = RC_DB::table('region')->whereIn('region_id', $data)->get();
+    	$data = ecjia_region::getRegions(explode(',', ecjia::config('mobile_recommend_city')));
     	$regions = array ();
     	if (!empty($data)) {
     		foreach ($data as $row) {
@@ -378,7 +377,7 @@ class admin_shortcut extends ecjia_admin {
     	$this->admin_priv('shortcut_update');
     	
     	$position_id = intval($_GET['position_id']);
-    	$city_id = intval($_GET['city_id']);
+    	$city_id = trim($_GET['city_id']);
     	$this->assign('position_id', $position_id);
     	$this->assign('city_id', $city_id);
 
@@ -388,7 +387,7 @@ class admin_shortcut extends ecjia_admin {
 
     	$info = RC_DB::TABLE('ad_position')->where('position_id', $position_id)->select('ad_width', 'ad_height')->first();
     	$data['ad_width'] = $info['ad_width'];
-    	$data['ad_height'] = $info['ad_height'];;
+    	$data['ad_height'] = $info['ad_height'];
     	$data['enabled'] = 1;
 		$this->assign('data', $data);
 	
@@ -419,12 +418,12 @@ class admin_shortcut extends ecjia_admin {
     			}
     		}
     	}else{
-    		return $this->showmessage('请上传快捷菜单片', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    		return $this->showmessage('请上传快捷菜单图片', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
     	}
     	
-    	if(empty($_POST['show_client'])){
+    	if (empty($_POST['show_client'])) {
     		return $this->showmessage('请选择投放平台', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-    	}else{
+    	} else {
     		$show_client = Ecjia\App\Adsense\Client::clientSelected($_POST['show_client']);
     	}
     	
@@ -439,8 +438,8 @@ class admin_shortcut extends ecjia_admin {
 		);
     	$id = RC_DB::table('ad')->insertGetId($data);
     	ecjia_admin::admin_log($ad_name, 'add', 'shortcut');
-    	$city_id = intval($_POST['city_id']);
-    	return $this->showmessage('添加快捷菜单成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('adsense/admin_shortcut/edit', array('id' => $id,'city_id'=>$city_id))));
+    	$city_id = trim($_POST['city_id']);
+    	return $this->showmessage('添加快捷菜单成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('adsense/admin_shortcut/edit', array('id' => $id, 'city_id' => $city_id))));
     }
     
     public function edit() {
@@ -456,7 +455,7 @@ class admin_shortcut extends ecjia_admin {
     	$data['ad_width'] = $info['ad_width'];
     	$data['ad_height'] = $info['ad_height'];
     	
-    	$city_id = intval($_GET['city_id']);
+    	$city_id = trim($_GET['city_id']);
     	$show_client = intval($_GET['show_client']);
     	$this->assign('city_id', $city_id);
     	$this->assign('show_client', $show_client);
@@ -495,9 +494,9 @@ class admin_shortcut extends ecjia_admin {
     		$ad_code = $old_pic;
     	}
     	
-    	if(empty($_POST['show_client'])){
+    	if (empty($_POST['show_client'])) {
     		return $this->showmessage('请选择投放平台', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-    	}else{
+    	} else {
     		$show_client = Ecjia\App\Adsense\Client::clientSelected($_POST['show_client']);
     	}
     	
@@ -511,7 +510,7 @@ class admin_shortcut extends ecjia_admin {
 		);
     	RC_DB::table('ad')->where('ad_id', $id)->update($data);
     	ecjia_admin::admin_log($ad_name, 'edit', 'shortcut');
-    	$city_id = intval($_POST['city_id']);
+    	$city_id = trim($_POST['city_id']);
     	$show_client = intval($_POST['show_client_value']);
     	return $this->showmessage('编辑快捷菜单成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('adsense/admin_shortcut/edit', array('id' => $id, 'city_id' => $city_id, 'show_client' => $show_client))));
     }
@@ -539,7 +538,7 @@ class admin_shortcut extends ecjia_admin {
     	$id       = intval($_POST['id']);
     	$val      = intval($_POST['val']);
     	$position_id  = intval($_GET['position_id']);
-    	$city_id      = intval($_GET['city_id']);
+    	$city_id      = trim($_GET['city_id']);
     	$show_client  = intval($_GET['show_client']);
     	
     	RC_DB::table('ad')->where('ad_id', $id)->update(array('enabled'=> $val));
@@ -555,7 +554,7 @@ class admin_shortcut extends ecjia_admin {
     	$id    = intval($_POST['pk']);
     	$sort_order   = intval($_POST['value']);
     	$position_id  = intval($_GET['position_id']);
-    	$city_id      = intval($_GET['city_id']);
+    	$city_id      = trim($_GET['city_id']);
     	$show_client  = intval($_GET['show_client']);
     	
     	RC_DB::table('ad')->where('ad_id', $id)->update(array('sort_order'=> $sort_order));

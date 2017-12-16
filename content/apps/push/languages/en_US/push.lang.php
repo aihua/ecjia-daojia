@@ -81,7 +81,7 @@ return array(
 	'resend'	=> 'Push again',
 	'push_copy' => 'Message reuse',
 		
-	//消息模版
+	//消息模板
 	'msg_template'				=> 'Message Template',
 	'add_msg_template'			=> 'Add Message Template',
 	'msg_template_list'			=> 'Message Template List',

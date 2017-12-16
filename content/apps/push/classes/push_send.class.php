@@ -234,7 +234,7 @@ class push_send {
     }
     
     /**
-     * 当短信发送失败时，可重新发送此条短信
+     * 当消息推送失败时，可重新推送此消息
      */
     public function resend($message_id) {
         $row = $this->db->find(array('message_id' => $message_id));

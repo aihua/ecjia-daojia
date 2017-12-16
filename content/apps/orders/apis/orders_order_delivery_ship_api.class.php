@@ -160,6 +160,7 @@ class orders_order_delivery_ship_api extends Component_Event_Api {
 		
 		/* 如果使用库存，且发货时减库存，则修改库存 */
 		if (ecjia::config('use_storage') == '1' && ecjia::config('stock_dec_time') == SDT_SHIP) {
+			RC_Loader::load_app_class('order_stork','orders');
 			foreach ($delivery_stock_result as $value) {
 				/* 商品（实货）、超级礼包（实货） */
 				if ($value['is_real'] != 0) {
@@ -174,6 +175,9 @@ class orders_order_delivery_ship_api extends Component_Event_Api {
 							'goods_number' => $value['storage'] - $value['sums'],
 						);
 						RC_DB::table('goods')->where('goods_id', $value['goods_id'])->update($data);
+						
+						//发货警告库存发送短信
+						order_stork::sms_goods_stock_warning($value['goods_id']);
 					}
 				}
 			}
@@ -244,45 +248,23 @@ class orders_order_delivery_ship_api extends Component_Event_Api {
 					return $this->showmessage(RC_Lang::get('orders::order.send_mail_fail'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
 			}
-			$result = ecjia_app::validate_application('sms');
-			if (!is_ecjia_error($result)) {
-				/* 如果需要，发短信 */
-				if (ecjia::config('sms_order_shipped') == '1' && $order['mobile'] != '') {
-					
-					//发送短信
-// 					$tpl_name = 'order_shipped_sms';
-// 					$tpl   = RC_Api::api('sms', 'sms_template', $tpl_name);
-// 					if (!empty($tpl)) {
-// 						$this->assign('order_sn', 		$order['order_sn']);
-// 						$this->assign('shipped_time', 	RC_Time::local_date(RC_Lang::get('orders::order.sms_time_format')));
-// 						$this->assign('mobile', 		$order['mobile']);
-// 						$this->assign('order', $order);
-// 						$this->assign('delivery_time', 	RC_Time::local_date(RC_Lang::get('orders::order.sms_time_format')));
-		
-// 						$content = $this->fetch_string($tpl['template_content']);
-		
-// 						$options = array(
-// 							'mobile' 		=> $order['mobile'],
-// 							'msg'			=> $content,
-// 							'template_id' 	=> $tpl['template_id'],
-// 						);
-// 						$response = RC_Api::api('sms', 'sms_send', $options);
-// 					}
-					$user_name = RC_DB::TABLE('users')->where('user_id', $order['user_id'])->pluck('user_name');
-					$options = array(
-						'mobile' => $order['mobile'],
-						'event'	 => 'sms_order_shipped',
-						'value'  =>array(
-							'user_name'    => $user_name,
-							'order_sn'     => $order['order_sn'],
-							'consignee'    => $order['consignee'],
-							'service_phone'=> ecjia::config('service_phone'),
-						),
-					);
-					$response = RC_Api::api('sms', 'send_event_sms', $options);
-					
-					
-				}
+			
+			/* 如果需要，发短信 */
+			$userinfo = RC_DB::table('users')->where('user_id', $order['user_id'])->selectRaw('user_name, mobile_phone')->first();
+			if (!empty($userinfo['mobile_phone'])) {
+			    //发送短信
+			    $user_name = $userinfo['user_name'];
+			    $options = array(
+			        'mobile' => $userinfo['mobile_phone'],
+			        'event'	 => 'sms_order_shipped',
+			        'value'  =>array(
+			            'user_name'    => $user_name,
+			            'order_sn'     => $order['order_sn'],
+			            'consignee'    => $order['consignee'],
+			            'service_phone'=> ecjia::config('service_phone'),
+			        ),
+			    );
+			    RC_Api::api('sms', 'send_event_sms', $options);
 			}
 		}
 	}

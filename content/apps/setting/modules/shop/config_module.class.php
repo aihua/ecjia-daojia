@@ -51,12 +51,10 @@ class config_module extends api_front implements api_interface
 
     public function handleRequest(\Royalcms\Component\HttpKernel\Request $request)
     {
-    	$db_region = RC_Loader::load_app_model('region_model', 'shipping');
-    	
     	$mobile_recommend_city = explode(',', ecjia::config('mobile_recommend_city'));
     	
     	$regions = array ();
-    	$region_data = $db_region->where(array('region_id' => $mobile_recommend_city ))->select();
+        $region_data = ecjia_region::getRegions($mobile_recommend_city);
     	if (!empty($region_data)) {
     		foreach ( $region_data as $val ) {
     			$regions[] = array(
@@ -65,6 +63,9 @@ class config_module extends api_front implements api_interface
     			);
     		}	
     	}
+    	
+    	/*闪惠规则*/
+    	$quickpay_rule = ecjia::config('quickpay_rule');
     	
         $data = array(
             'service_phone'     => ecjia::config('service_phone'),
@@ -82,6 +83,8 @@ class config_module extends api_front implements api_interface
         	'get_password_url'	=> RC_Uri::url('user/get_password/forget_pwd', 'type=mobile'),
         	'recommend_city'	=> $regions,
         	'bonus_readme_url'	=> RC_Uri::site_url().ecjia::config('bonus_readme_url'),
+        	'quickpay_rule'		=> $quickpay_rule,
+        	'merchant_join_close' => ecjia::config('merchant_join_close'),
         );
         
         $result = ecjia_app::validate_application('sms');
@@ -89,6 +92,21 @@ class config_module extends api_front implements api_interface
          
         if (is_ecjia_error($result) && !$is_active) {
         	$data['get_password_url'] = RC_Uri::url('user/get_password/forget_pwd', 'type=email');
+        }
+        
+        $store_model = trim(ecjia::config('store_model'));
+        
+        if ($store_model == 'nearby' || empty($store_model)) {
+        	$data['store_model'] = 'nearby';
+        } else if (!empty($store_model)) {
+        	$store_id = $store_model;
+        	$store_model = explode(',', $store_model);
+        	if (count($store_model) == 1) {
+        		$data['store_model'] = 'single';
+        		$data['store_id'] = $store_id;
+        	} else {
+        		$data['store_model'] = 'recommend';
+        	}
         }
         
         $device	= $this->device;
@@ -119,7 +137,8 @@ class config_module extends api_front implements api_interface
         
         $data['mobile_app_icon'] = ecjia_config::has('mobile_app_icon') ? RC_Upload::upload_url() . '/' . ecjia::config('mobile_app_icon') : '';
        	$shop_type = RC_Config::load_config('site', 'SHOP_TYPE');
-        $data['shop_type'] = !empty($shop_type) ? $shop_type : 'b2c';
+       	
+        $data['shop_type'] = !empty($shop_type) ? $shop_type : 'cityo2o';
         $data['wap_app_download_show'] = ecjia::config('wap_app_download_show');
         $data['wap_app_download_img'] = ecjia_config::has('wap_app_download_img') ? RC_Upload::upload_url() . '/' . ecjia::config('wap_app_download_img') : '';
         

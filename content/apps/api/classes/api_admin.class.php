@@ -78,7 +78,7 @@ abstract class api_admin extends ecjia_api {
 		});
 	
 		RC_Hook::add_filter('royalcms_session_id', function ($sessin_id) {
-			return RC_Hook::apply_filters('ecjia_api_session_id', '');
+			return RC_Hook::apply_filters('ecjia_api_session_id', $sessin_id);
 		});
 	
 		RC_Session::start();
@@ -91,7 +91,7 @@ abstract class api_admin extends ecjia_api {
 // 		if (!empty($this->token)) {
 // 			if (RC_Session::session_id() != $this->token) {
 //     			RC_Session::destroy();
-//     			RC_Session::init(null, $this->token);
+//     			`RC_Session::init(null, $this->token);
 //     		}
 // 		}
 	}
@@ -104,7 +104,7 @@ abstract class api_admin extends ecjia_api {
 			$input = explode('.', $key);
 			$request = royalcms('request');
 			$input_val = $request->input($input[0]);
-			if(isset($input_val)) {
+			if (isset($input_val)) {
 			    $this->requestData[$input[0]] = $request->input($input[0]);
 			}
 			return array_get($this->requestData, $key, $default);

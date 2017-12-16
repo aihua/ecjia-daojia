@@ -156,16 +156,16 @@ class mh_delivery extends ecjia_merchant {
 
 		/* 取得区域名 */
 		$field = array("concat(IFNULL(c.region_name, ''), '  ', IFNULL(p.region_name, ''),'  ', IFNULL(t.region_name, ''), '  ', IFNULL(d.region_name, '')) AS region");
-
-
 		$db_order_info = RC_DB::table('order_info as o')
-				->leftJoin('region as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))
-				->leftJoin('region as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))
-				->leftJoin('region as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))
-				->leftJoin('region as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'));
+				->leftJoin('regions as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))
+				->leftJoin('regions as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))
+				->leftJoin('regions as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))
+				->leftJoin('regions as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'));
 		$order_id = $delivery_order['order_id'];
+		
 		$region = $db_order_info->selectRaw("concat(IFNULL(c.region_name, ''), '  ', IFNULL(p.region_name, ''),'  ', IFNULL(t.region_name, ''), '  ', IFNULL(d.region_name, '')) AS region")
 				->where(RC_DB::raw('o.order_id'), $order_id)->first();
+		
 		$delivery_order['region'] = $region['region'] ;
 
 		/* 是否保价 */
@@ -201,8 +201,8 @@ class mh_delivery extends ecjia_merchant {
 		}
 		
 		/* 判断配送方式是否是立即送*/
-		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-		$shipping_info = $shipping_method->shipping_info($delivery_order['shipping_id']);
+// 		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+		$shipping_info = ecjia_shipping::pluginData(intval($delivery_order['shipping_id']));
 		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
 			/* 获取正在派单的配送员*/
 			$staff_list = RC_DB::table('staff_user')
@@ -215,6 +215,18 @@ class mh_delivery extends ecjia_merchant {
 			
 			$express_order = RC_DB::table('express_order')->where('delivery_id', $delivery_order['delivery_id'])->first();
 			$this->assign('express_order', $express_order);
+		}
+		
+		//获取shopping_code
+		if(empty($delivery_order['invoice_no'])) {
+		    $shipping_id = $delivery_order['shipping_id'];
+		    $shipping_info = RC_DB::table('shipping')->where('shipping_id', $shipping_id)->first();
+		    if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
+		        $rand1 = mt_rand(100000,999999);
+		        $rand2 = mt_rand(1000000,9999999);
+		        $invoice_no = $rand1.$rand2;
+		        $delivery_order['invoice_no'] = $invoice_no;
+		    }
 		}
 		
 		/* 模板赋值 */
@@ -241,7 +253,7 @@ class mh_delivery extends ecjia_merchant {
 		/* 检查权限 */
 		$this->admin_priv('delivery_view', ecjia::MSGTYPE_JSON);
 		
-		$db_delivery = RC_Loader::load_app_model('delivery_viewmodel','orders');
+		// $db_delivery = RC_Loader::load_app_model('delivery_viewmodel','orders');
 		/* 定义当前时间 */
 		define('GMTIME_UTC', RC_Time::gmtime()); // 获取 UTC 时间戳
 		/* 取得参数 */
@@ -265,7 +277,8 @@ class mh_delivery extends ecjia_merchant {
 		}
 		
 		/* 判断备注是否填写*/
-		if (empty($_POST['action_note'])) {
+		$require_note = ecjia::config('order_ship_note');
+		if ($require_note == 1 && empty($_POST['action_note'])) {
 		    return $this->showmessage(__('请填写备注信息！') , ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 		}
 		/* 根据发货单id查询发货单信息 */
@@ -281,8 +294,16 @@ class mh_delivery extends ecjia_merchant {
 		$order = order_info($order_id);
 		
 		/* 检查此单发货商品库存缺货情况 */
-		$virtual_goods			= array();
-		$delivery_stock_result	= $db_delivery->join(array('goods','products'))->where(array('dg.delivery_id' => $delivery_id))->group('dg.product_id')->select();
+		$virtual_goods = array();
+		// $delivery_stock_result = $db_delivery->join(array('goods','products'))->where(array('dg.delivery_id' => $delivery_id))->group('dg.product_id')->select();
+
+		$delivery_stock_result = RC_DB::table('delivery_goods as dg')
+			->leftJoin('goods as g', RC_DB::raw('dg.goods_id'), '=', RC_DB::raw('g.goods_id'))
+			->leftJoin('products as p', RC_DB::raw('dg.product_id'), '=', RC_DB::raw('p.product_id'))
+			->selectRaw('dg.goods_id, dg.is_real, dg.product_id, SUM(dg.send_number) AS sums, IF(dg.product_id > 0, p.product_number, g.goods_number) AS storage, g.goods_name, dg.send_number')
+			->where(RC_DB::raw('dg.delivery_id'), $delivery_id)
+			->groupBy(RC_DB::raw('dg.product_id'))
+			->get();
 
 		/* 如果商品存在规格就查询规格，如果不存在规格按商品库存查询 */
 		if(!empty($delivery_stock_result)) {
@@ -306,17 +327,23 @@ class mh_delivery extends ecjia_merchant {
 				}
 			}
 		} else {
-			$db_delivery->view = array(
-				'goods' => array(
-					'type'		=> Component_Model_View::TYPE_LEFT_JOIN,
-					'alias'		=> 'g',
-					'field'		=> 'dg.goods_id, dg.is_real, SUM(dg.send_number) AS sums, g.goods_number, g.goods_name, dg.send_number',
-					'on'		=> 'dg.goods_id = g.goods_id ',
-				)
-			);
+			// $db_delivery->view = array(
+			// 	'goods' => array(
+			// 		'type'		=> Component_Model_View::TYPE_LEFT_JOIN,
+			// 		'alias'		=> 'g',
+			// 		'field'		=> 'dg.goods_id, dg.is_real, SUM(dg.send_number) AS sums, g.goods_number, g.goods_name, dg.send_number',
+			// 		'on'		=> 'dg.goods_id = g.goods_id ',
+			// 	)
+			// );
 
-			$delivery_stock_result = $db_delivery->where(array('dg.delivery_id' => $delivery_id))->group('dg.goods_id')->select();
-
+			// $delivery_stock_result = $db_delivery->where(array('dg.delivery_id' => $delivery_id))->group('dg.goods_id')->select();
+			$delivery_stock_result = RC_DB::table('delivery_goods as dg')
+				->leftJoin('goods as g', RC_DB::raw('dg.goods_id'), '=', RC_DB::raw('g.goods_id'))
+				->selectRaw('dg.goods_id, dg.is_real, SUM(dg.send_number) AS sums, g.goods_number, g.goods_name, dg.send_number')
+				->where(RC_DB::raw('dg.delivery_id'), $delivery_id)
+				->groupBy(RC_DB::raw('dg.goods_id'))
+				->get();
+			
 			foreach ($delivery_stock_result as $value) {
 				if (($value['sums'] > $value['goods_number'] || $value['goods_number'] <= 0) &&
 					((ecjia::config('use_storage') == '1'  && ecjia::config('stock_dec_time') == SDT_SHIP) ||
@@ -347,6 +374,7 @@ class mh_delivery extends ecjia_merchant {
 
 		/* 如果使用库存，且发货时减库存，则修改库存 */
 		if (ecjia::config('use_storage') == '1' && ecjia::config('stock_dec_time') == SDT_SHIP) {
+			RC_Loader::load_app_class('order_stork','orders');
 			foreach ($delivery_stock_result as $value) {
 				/* 商品（实货）、超级礼包（实货） */
 				if ($value['is_real'] != 0) {
@@ -361,6 +389,8 @@ class mh_delivery extends ecjia_merchant {
 								'goods_number' => $value['storage'] - $value['sums'],
 						);
 						$this->db_goods->where(array('goods_id' => $value['goods_id']))->update($data);
+						//发货警告库存发送短信
+						order_stork::sms_goods_stock_warning($value['goods_id']);
 					}
 				}
 			}
@@ -401,8 +431,9 @@ class mh_delivery extends ecjia_merchant {
 		order_action($order['order_sn'], OS_CONFIRMED, $shipping_status, $order['pay_status'], $action_note, null, 1);
 		
 		/* 判断发货单，生成配送单*/
-		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-		$shipping_info = $shipping_method->shipping_info($delivery_order['shipping_id']);
+// 		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+		$shipping_info = ecjia_shipping::pluginData(intval($delivery_order['shipping_id']));
+		
 		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
 			$staff_id = isset($_POST['staff_id']) ? intval($_POST['staff_id']) : 0;
 			$express_from = !empty($staff_id) ? 'assign' : 'grab';
@@ -444,10 +475,12 @@ class mh_delivery extends ecjia_merchant {
 			$store_info = RC_DB::table('store_franchisee')->where('store_id', $_SESSION['store_id'])->first();
 				
 			if (!empty($store_info['longitude']) && !empty($store_info['latitude'])) {
-				$url = "https://api.map.baidu.com/routematrix/v2/riding?output=json&output=json&origins=".$store_info['latitude'].",".$store_info['longitude']."&destinations=".$delivery_order['latitude'].",".$delivery_order['longitude']."&ak=Cgk4EqiiIG4ylFFto9XotosT2ZHF1daZ";
-				$distance_json = file_get_contents($url);
-				$distance_info = json_decode($distance_json, true);
-				$express_data['distance'] = isset($distance_info['result'][0]['distance']['value']) ? $distance_info['result'][0]['distance']['value'] : 0;
+				//腾讯地图api距离计算
+              	$key = ecjia::config('map_qq_key');
+		        $url = "http://apis.map.qq.com/ws/distance/v1/?mode=driving&from=".$store_info['latitude'].",".$store_info['longitude']."&to=".$delivery_order['latitude'].",".$delivery_order['longitude']."&key=".$key;
+		        $distance_json = file_get_contents($url);
+		     	$distance_info = json_decode($distance_json, true);
+		     	$express_data['distance'] = isset($distance_info['result']['elements'][0]['distance']) ? $distance_info['result']['elements'][0]['distance'] : 0;
 			}
 				
 			$exists_express_order = RC_DB::table('express_order')->where('delivery_sn', $delivery_order['delivery_sn'])->where('store_id', $_SESSION['store_id'])->first();
@@ -471,6 +504,34 @@ class mh_delivery extends ecjia_merchant {
 			    $field = 'eo.*, oi.add_time as order_time, oi.pay_time, oi.order_amount, oi.pay_name, sf.merchants_name, sf.address as merchant_address, sf.longitude as merchant_longitude, sf.latitude as merchant_latitude';
 			    $express_order_info = $express_order_viewdb->field($field)->join(array('delivery_order', 'order_info', 'store_franchisee'))->where($where)->find();
 			    
+			    /* 派单发短信 */
+			    if (!empty($express_order_info['express_mobile'])) {
+			    	$options = array(
+		    			'mobile' => $express_order_info['express_mobile'],
+		    			'event'	 => 'sms_express_system_assign',
+		    			'value'  =>array(
+		    				'express_sn'=> $express_order_info['express_sn'],
+		    			),
+			    	);
+			    	RC_Api::api('sms', 'send_event_sms', $options);
+			    }
+
+			    /*派单推送消息*/
+			    $options = array(
+		    		'user_id'   => $staff_id,
+		    		'user_type' => 'merchant',
+		    		'event'     => 'express_system_assign',
+		    		'value' => array(
+	    				'express_sn'=> $express_order_info['express_sn'],
+		    		),
+		    		'field' => array(
+		    			'open_type' => 'admin_message',
+		    		),
+			    );
+			    RC_Api::api('push', 'push_event_send', $options);
+
+
+			    //消息通知
 			    $notification_express_data = array(
 			        'title'	=> '系统派单',
 			        'body'	=> '有单啦！系统已分配配送单到您账户，赶快行动起来吧！',
@@ -505,23 +566,32 @@ class mh_delivery extends ecjia_merchant {
 			    $express_assign = new ExpressAssign($notification_express_data);
 			    RC_Notification::send($user, $express_assign);
 			    
-				/*推送消息*/
-				$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_id));
-				if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-					$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'system_express_assign', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
-					if (!empty($push_event)) {
-						RC_Loader::load_app_class('push_send', 'push', false);
-						ecjia_admin::$controller->assign('express_info', $express_order_info);
-						$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
+				
+// 				$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_id));
+// 				if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
+// 					$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'system_express_assign', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
+// 					if (!empty($push_event)) {
+// 						RC_Loader::load_app_class('push_send', 'push', false);
+// 						ecjia_admin::$controller->assign('express_info', $express_order_info);
+// 						$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
 		
-						if ($devic_info['device_client'] == 'android') {
-							$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-						} elseif ($devic_info['device_client'] == 'iphone') {
-							$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-						}
-					}
-				}
+// 						if ($devic_info['device_client'] == 'android') {
+// 							$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 						} elseif ($devic_info['device_client'] == 'iphone') {
+// 							$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 						}
+// 					}
+// 				}
 			}
+
+			/* 如果是o2o速递则在 ecjia_express_track_record表内更新一条记录*/
+			$express_track_record_data = array(
+			    "express_code"    =>  $shipping_info['shipping_code'],
+			    "track_number"    =>  $delivery['invoice_no'],
+			    "time"            =>  RC_Time::local_date(ecjia::config('time_format'), RC_Time::gmtime()),
+			    "context"         =>  "您的订单已配备好，等待配送员取货",
+			);
+			RC_DB::table('express_track_record')->insert($express_track_record_data);
 		}
 		
 		/* 如果当前订单已经全部发货 */
@@ -565,50 +635,46 @@ class mh_delivery extends ecjia_merchant {
 				}
 			}
 
-			$result = ecjia_app::validate_application('sms');
-			if (!is_ecjia_error($result)) {
-				/* 如果需要，发短信 */
-				if (ecjia::config('sms_order_shipped') == '1' && $order['mobile'] != '') {
-					
-					
-					//发送短信
-// 					$tpl_name = 'order_shipped_sms';
-// 					$tpl   = RC_Api::api('sms', 'sms_template', $tpl_name);
-
-// 					if (!empty($tpl)) {
-// 						$this->assign('order_sn', $order['order_sn']);
-// 						$this->assign('shipped_time', RC_Time::local_date(RC_Lang::get('orders::order.sms_time_format')));
-// 						$this->assign('mobile', $order['mobile']);
-// 						$this->assign('order', $order);
-// 						$this->assign('delivery_time', 	RC_Time::local_date(RC_Lang::get('orders::order.sms_time_format')));
-						
-// 						$content = $this->fetch_string($tpl['template_content']);
-						
-// 						$options = array(
-// 								'mobile' 		=> $order['mobile'],
-// 								'msg'			=> $content,
-// 								'template_id' 	=> $tpl['template_id'],
-// 						);
-// 						$response = RC_Api::api('sms', 'sms_send', $options);
-// 					}
-					
-					$user_name = RC_DB::TABLE('users')->where('user_id', $order['user_id'])->pluck('user_name');
-					$options = array(
-						'mobile' => $order['mobile'],
-						'event'	 => 'sms_order_shipped',
-						'value'  =>array(
-							'user_name'    => $user_name,
-							'order_sn'     => $order['order_sn'],
-							'consignee'    => $order['consignee'],
-							'service_phone'=> ecjia::config('service_phone'),
-						),
-					);
-					$response = RC_Api::api('sms', 'send_event_sms', $options);
-				}
+            /* 商家发货 如果需要，发短信 */
+			$userinfo = RC_DB::table('users')->where('user_id', $order['user_id'])->selectRaw('user_name, mobile_phone')->first();
+			if (!empty($userinfo['mobile_phone'])) {
+				//发送短信
+				$user_name = $userinfo['user_name'];
+				$options = array(
+					'mobile' => $userinfo['mobile_phone'],
+					'event'	 => 'sms_order_shipped',
+					'value'  =>array(
+						'user_name'    => $user_name,
+						'order_sn'     => $order['order_sn'],
+						'consignee'    => $order['consignee'],
+						'service_phone'=> ecjia::config('service_phone'),
+					),
+				);
+				RC_Api::api('sms', 'send_event_sms', $options);
 			}
 		}
 		
-		/* 通知记录*/
+		$user_name = RC_DB::TABLE('users')->where('user_id', $order['user_id'])->pluck('user_name');
+		
+		/*商家发货 推送消息*/
+		$options = array(
+			'user_id'   => $order['user_id'],
+			'user_type' => 'user',
+			'event'     => 'order_shipped',
+			'value' => array(
+				'user_name'=> $user_name,
+				'order_sn' => $order['order_sn'],
+				'consignee'=> $order['consignee'],
+				'service_phone'=> ecjia::config('service_phone'),
+			),
+			'field' => array(
+				'open_type' => 'admin_message',
+			),
+		);
+		RC_Api::api('push', 'push_event_send', $options);
+		
+		
+		//消息通知
 		$orm_user_db = RC_Model::model('orders/orm_users_model');
 		$user_ob = $orm_user_db->find($order['user_id']);
 		
@@ -632,23 +698,25 @@ class mh_delivery extends ecjia_merchant {
 		$push_order_shipped = new OrderShipped($order_data);
 		RC_Notification::send($user_ob, $push_order_shipped);
 		/* 发货通知*/
-		$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'user', 'user_id' => $order['user_id']));
-		if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-			$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_shipped', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
+// 		$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'user', 'user_id' => $order['user_id']));
+// 		if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
+// 			$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_shipped', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
 				
-			if (!empty($push_event)) {
+// 			if (!empty($push_event)) {
 		
-				RC_Loader::load_app_class('push_send', 'push', false);
-				ecjia_admin::$controller->assign('order', $order);
-				$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
+// 				RC_Loader::load_app_class('push_send', 'push', false);
+// 				ecjia_admin::$controller->assign('order', $order);
+// 				$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
 					
-				if ($devic_info['device_client'] == 'android') {
-					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-				} elseif ($devic_info['device_client'] == 'iphone') {
-					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-				}
-			}
-		}
+// 				if ($devic_info['device_client'] == 'android') {
+// 					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 				} elseif ($devic_info['device_client'] == 'iphone') {
+// 					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 				}
+// 			}
+// 		}
+
+
 		/* 操作成功 */
 		$links[] = array('text' => RC_Lang::get('orders::order.order_delivery_list'), 'href' => RC_Uri::url('orders/mh_delivery/init'));
 		$links[] = array('text' => RC_Lang::get('orders::order.delivery_sn') . RC_Lang::get('orders::order.detail'), 'href' => RC_Uri::url('orders/mh_delivery/delivery_info', 'delivery_id=' . $delivery_id));
@@ -671,7 +739,8 @@ class mh_delivery extends ecjia_merchant {
 		$action_note			= isset($_POST['action_note'])	? trim($_POST['action_note']) : '';
 
 		/* 判断备注是否填写*/
-		if (empty($_POST['action_note'])) {
+		$require_note = ecjia::config('order_unship_note');
+		if ($require_note == 1 && empty($_POST['action_note'])) {
 		    return $this->showmessage(__('请填写备注信息！') , ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 		}
 		/* 根据发货单id查询发货单信息 */
@@ -727,7 +796,13 @@ class mh_delivery extends ecjia_merchant {
 		if (ecjia::config('use_storage') == '1' && ecjia::config('stock_dec_time') == SDT_SHIP) {
 			// 检查此单发货商品数量
 			$virtual_goods = array();
-			$delivery_stock_result = $this->db_delivery->field('goods_id, product_id, is_real, SUM(send_number)|sums')->where(array('delivery_id' => $delivery_id))->group('goods_id')->select();
+			// $delivery_stock_result = $this->db_delivery->field('goods_id, product_id, is_real, SUM(send_number)|sums')->where(array('delivery_id' => $delivery_id))->group('goods_id')->select();
+
+			$delivery_stock_result = RC_DB::table('delivery_goods')
+				->selectRaw('goods_id, product_id, is_real, SUM(send_number) as sums')
+				->where('delivery_id', $delivery_id)
+				->groupBy('goods_id')
+				->get();
 
 			foreach ($delivery_stock_result as $key => $value) {
 				/* 虚拟商品 */
@@ -768,9 +843,11 @@ class mh_delivery extends ecjia_merchant {
 		}
 
 		/* 判断发货单，取消配送单*/
-		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-		$shipping_info = $shipping_method->shipping_info($delivery_order['shipping_id']);
+// 		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+		$shipping_info = ecjia_shipping::pluginData($delivery_order['shipping_id']);
 		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
+		    /* 如果是o2o速递，退货的时候删除ecjia_express_track_record相对应的记录 */
+		    RC_DB::table('express_track_record')->where('track_number', $delivery['invoice_no'])->delete();
 		}
 		/* 操作成功 */
 		$links[] = array('text' => RC_Lang::get('orders::order.delivery_sn') . RC_Lang::get('orders::order.detail'), 'href' => RC_Uri::url('orders/mh_delivery/delivery_info', 'delivery_id=' . $delivery_id));
@@ -808,7 +885,13 @@ class mh_delivery extends ecjia_merchant {
 					/* 更新：删除订单中的发货单号 */
 					del_order_invoice_no($delivery_order['order_id'], $delivery_order['invoice_no']);
 				}
-
+				
+				/* 如果是o2o速递，退货的时候删除ecjia_express_track_record相对应的记录 */
+// 				$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+				$shipping_info = ecjia_shipping::pluginData($delivery_order['shipping_id']);
+				if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
+				    RC_DB::table('express_track_record')->where('track_number', $delivery_order['invoice_no'])->delete();
+				}
 				/* 记录日志 */
 				ecjia_admin_log::instance()->add_object('delivery_order', '发货单');
 				if ($type == 'batch') {
@@ -835,14 +918,14 @@ class mh_delivery extends ecjia_merchant {
 		$id = $_GET['delivery_id'];
 		if (!empty($id)) {
 			$delivery_order = delivery_order_info($id);
-                $row = RC_DB::table('delivery_order')->select(RC_DB::raw('order_id, consignee, address, country, province, city, district, sign_building, email, zipcode, tel, mobile, best_time'))
+                $row = RC_DB::table('delivery_order')->select(RC_DB::raw('order_id, consignee, address, country, province, city, district, street, sign_building, email, zipcode, tel, mobile, best_time'))
 				            ->where('delivery_id', $id)->first();
 			if (!empty($row)) {
 			    $region = RC_DB::table('order_info as o')
-    			    ->leftJoin('region as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))
-    			    ->leftJoin('region as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))
-    			    ->leftJoin('region as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))
-    			    ->leftJoin('region as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'))
+    			    ->leftJoin('regions as c', RC_DB::raw('o.country'), '=', RC_DB::raw('c.region_id'))
+    			    ->leftJoin('regions as p', RC_DB::raw('o.province'), '=', RC_DB::raw('p.region_id'))
+    			    ->leftJoin('regions as t', RC_DB::raw('o.city'), '=', RC_DB::raw('t.region_id'))
+    			    ->leftJoin('regions as d', RC_DB::raw('o.district'), '=', RC_DB::raw('d.region_id'))
     			    ->select(RC_DB::raw("concat(IFNULL(c.region_name, ''), '  ', IFNULL(p.region_name, ''),'  ', IFNULL(t.region_name, ''), '  ', IFNULL(d.region_name, '')) AS region"))
     			    ->where(RC_DB::raw('o.order_id'), $row['order_id'])
     			    ->first();

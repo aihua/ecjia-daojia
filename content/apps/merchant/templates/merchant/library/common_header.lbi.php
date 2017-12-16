@@ -6,7 +6,7 @@
         <div class="container">
             <!-- start:navbar-header -->
             <div class="navbar-header">
-                <a class="navbar-brand" href="{RC_Uri::url('franchisee/merchant/init')}"><i class="fa fa-cubes"></i> <strong>{ecjia::config('shop_name')} - {if $shop_title}{$shop_title}{else}商家入驻{/if}</strong></a>
+                <a class="navbar-brand" href="{if $shop_title_link}{$shop_title_link}{else}{RC_Uri::url('franchisee/merchant/init')}{/if}"><i class="fa fa-cubes"></i> <strong>{ecjia::config('shop_name')} - {if $shop_title}{$shop_title}{else}商家入驻{/if}</strong></a>
             </div>
             <!-- end:navbar-header -->
             <ul class="nav navbar-nav navbar-left top-menu">
@@ -106,7 +106,7 @@
             </ul>
             <ul class="nav navbar-nav navbar-right top-menu">
                 <li class="dropdown">
-                    <input type="text" class="form-control input-sm search_query" placeholder="搜索" data-toggle="dropdown">
+                    <input type="text" class="form-control input-sm search_query" placeholder="搜索导航" data-toggle="dropdown">
                    	<ul class="dropdown-menu search-nav">
                    		<li class="search_query_none"><a href="javascript:;">{t}请先输入搜索信息{/t}</a></li>
 						<!--{ecjia:hook id=merchant_sidebar_collapse_search}-->
@@ -159,7 +159,13 @@ border-bottom: 15px solid #f2f2f2;"
             
                 <!-- Collect the nav links, forms, and other content for toggling -->
                 <div class="collapse navbar-collapse navbar-ex1-collapse">
+                	<!-- {if $current_order} -->
+                	<ul class="nav navbar-nav current-order-navbar">
+	                	<div class="current-order-header">订单快速处理</div>
+                	</ul>
+                	<!-- {else} -->
                     <!-- {ecjia:hook id=merchant_print_header_nav} -->
+                    <!-- {/if} -->
                 </div><!-- /.navbar-collapse -->
             </div>
         </nav>

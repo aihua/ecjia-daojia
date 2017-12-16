@@ -14,33 +14,53 @@
 <script type="text/javascript">
 	ecjia.merchant.franchisee.init();
 </script>
-<script type="text/javascript" src="https://api.map.baidu.com/api?v=2.0&ak=P4C6rokKFWHjXELjOnogw3zbxC0VYubo"></script>
 <script type="text/javascript">
-    // 百度地图API功能
-    var step='{$step}';
-    var lng='{$data.longitude}';
-    var lat='{$data.latitude}';
-    if(lng && lat){
-        var map = new BMap.Map("allmap");
-        var point = new BMap.Point(lng, lat);  // 创建点坐标
-        map.centerAndZoom(point,15);
-        var marker = new BMap.Marker(point);  // 创建标注
-    	map.addOverlay(marker);               // 将标注添加到地图中
-        if(step == 1){
-            map.addEventListener("click",function(e){
-                map.removeOverlay(marker);
-                $('input[name="longitude"]').val(e.point.lng)
-                $('input[name="latitude"]').val(e.point.lat)
-                point = new BMap.Point(e.point.lng, e.point.lat);
-                marker = new BMap.Marker(point)
-                map.addOverlay(marker);
-            });
-        }
-    }
+	//腾讯地图
+	var map, markersArray = [];
+	var step='{$step}';
+    var lat = '{$data.latitude}';
+    var lng = '{$data.longitude}';
+	var latLng = new qq.maps.LatLng(lat, lng);
+	var map = new qq.maps.Map(document.getElementById("allmap"),{
+	    center: latLng,
+	    zoom: 16
+	});
+	setTimeout(function(){
+	    var marker = new qq.maps.Marker({
+	        position: latLng, 
+	        map: map
+	      });
+	    markersArray.push(marker);
+	}, 500);
+	if (step == 1) {
+		//添加监听事件 获取鼠标单击事件
+		qq.maps.event.addListener(map, 'click', function(event) {
+		    if (markersArray) {
+		        for (i in markersArray) {
+		            markersArray[i].setMap(null);
+		        }
+		        markersArray.length = 0;
+		    }
+		    $('input[name="longitude"]').val(event.latLng.lng)
+		    $('input[name="latitude"]').val(event.latLng.lat)
+		       var marker = new qq.maps.Marker({
+		        position: event.latLng, 
+		        map: map
+		      });
+		    markersArray.push(marker);    
+		});
+	}
 </script>
 <!-- {/block} -->
 
 <!-- {block name="home-content"} -->
+{if $browser_warning}
+<div class="alert alert-warning">
+	<button type="button" class="close" data-dismiss="alert" aria-hidden="true"><i class="fa fa-times" data-original-title="" title=""></i></button>
+	<strong>温馨提示：</strong>{$browser_warning}
+</div>
+{/if}
+
 {if $step eq 1 && $type neq 'edit_apply'}
 <div class="alert alert-info">
 	<button type="button" class="close" data-dismiss="alert" aria-hidden="true"><i class="fa fa-times" data-original-title="" title=""></i></button>
@@ -196,8 +216,8 @@
 					
 					<div class="form-group">
 						<label class="control-label col-lg-2">选择地区：</label>
-						<div class="col-lg-6 controls">
-							<div class="col-lg-4 p_l0 p_r5">
+						<div class="controls">
+							<div class="w120 f_l m_l15 m_r10">
 								<select class="region-summary-provinces col-lg-12" name="province" id="selProvinces" data-url="{url path='franchisee/merchant/get_region'}" data-toggle="regionSummary" data-type="2" data-target="region-summary-cities">
 									<option value='0'>{lang key='system::system.select_please'}</option>
 									<!-- {foreach from=$province item=region} -->
@@ -206,8 +226,8 @@
 								</select>
 							</div>
 							
-							<div class="col-lg-4 p_l0 p_r5">
-								<select class="region-summary-cities col-lg-12" name="city" id="selCities" data-url="{url path='franchisee/merchant/get_region'}" data-toggle="regionSummary" data-type="3" data-target="region-summary-district">
+							<div class="w120 f_l m_r10">
+								<select class="region-summary-cities col-lg-12" name="city" id="selCities" data-toggle="regionSummary" data-type="3" data-target="region-summary-district">
 									<option value='0'>{lang key='system::system.select_please'}</option>
 									<!-- {foreach from=$city item=region} -->
 									<option value="{$region.region_id}" {if $region.region_id eq $data.city}selected{/if}>{$region.region_name}</option>
@@ -215,16 +235,25 @@
 								</select>
 							</div>
 							
-							<div class="col-lg-4 p_l0 p_r0">
-								<select class="region-summary-district col-lg-12" name="district" id="seldistrict">
+							<div class="w120 f_l m_r10">
+								<select class="form-control region-summary-district" id="selDistrict" data-toggle="regionSummary" name="district" data-type="4" data-target="region-summary-street">
 									<option value='0'>{lang key='system::system.select_please'}</option>
 									<!-- {foreach from=$district item=region} -->
 									<option value="{$region.region_id}" {if $region.region_id eq $data.district}selected{/if}>{$region.region_name}</option>
 									<!-- {/foreach} -->
 								</select>
 							</div>
+							
+							<div class="w120 f_l m_r10">
+                          		<select class="form-control region-summary-street" name="street" >
+                                    <option value='0'>{t}请选择...{/t}</option>
+                                    <!-- {foreach from=$street item=region} -->
+                                    <option value="{$region.region_id}" {if $region.region_id eq $data.street}selected{/if}>{$region.region_name}</option>
+                                    <!-- {/foreach} -->
+                                </select>
+                            </div>
+                            <span class="input-must">*</span>
 						</div>
-						<span class="input-must">*</span>
 					</div>
 					
 					<div class="form-group">
@@ -239,7 +268,7 @@
                   		</div>
 					</div>
 					
-                        <div class="form-group localtion-address {if !$data.longitude || !$data.latitude}hide{/if}">
+                        <div class="form-group location-address {if !$data.longitude || !$data.latitude}hide{/if}">
                             <label class="control-label col-lg-2">店铺精确位置：</label>
                             <div class="col-lg-6">
                                 <div id="allmap" style="height:320px;"></div>
@@ -467,7 +496,7 @@
 		                                    <td class="active w350" align="right">{lang key='merchant::merchant.merchant_addres'}：</td>
 		                                    <td>
 		                                        <div id="allmap" style="height:320px;"></div>
-		                                        <div class="help-block">双击放大地图,拖动查看地图其他区域</div>
+		                                        <div class="help-block">双击放大地图，拖动查看地图其他区域</div>
 		                                        <div class="help-block">当前经纬度：{$data.longitude},{$data.latitude}</div>
 		                                    </td>
 		                                </tr>

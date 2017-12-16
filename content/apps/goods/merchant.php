@@ -235,8 +235,8 @@ class merchant extends ecjia_merchant {
 		$cat_name = RC_DB::table('category')->where('cat_id', $goods['cat_id'])->pluck('cat_name');
 		$brand_name = RC_DB::table('brand')->where('brand_id', $goods['brand_id'])->pluck('brand_name');
 		$merchant_cat_name = RC_DB::table('merchants_category')->where('cat_id', $goods['merchant_cat_id'])->pluck('cat_name');
-
-		if (!file_exists(RC_Upload::upload_path($goods['goods_thumb'])) || empty($goods['goods_thumb'])) {
+		$disk = RC_Filesystem::disk();
+		if (!$disk->exists(RC_Upload::upload_path($goods['goods_thumb'])) || empty($goods['goods_thumb'])) {
 			$goods['goods_thumb'] = RC_Uri::admin_url('statics/images/nopic.png');
 			$goods['goods_img'] = RC_Uri::admin_url('statics/images/nopic.png');
 		} else {
@@ -259,14 +259,15 @@ class merchant extends ecjia_merchant {
 		//商品相册
 		$goods_photo_list = RC_DB::table('goods_gallery')->where('goods_id', $goods['goods_id'])->get();
 		if (!empty($goods_photo_list)) {
+			$disk = RC_Filesystem::disk();
 			foreach ($goods_photo_list as $k => $v) {
-				if (!file_exists(RC_Upload::upload_path($v['img_url'])) || empty($v['img_url'])) {
+				if (!$disk->exists(RC_Upload::upload_path($v['img_url'])) || empty($v['img_url'])) {
 					$goods_photo_list[$k]['img_url'] = RC_Uri::admin_url('statics/images/nopic.png');
 				} else {
 					$goods_photo_list[$k]['img_url'] = RC_Upload::upload_url($v['img_url']);
 				}
 		
-				if (!file_exists(RC_Upload::upload_path($v['thumb_url'])) || empty($v['thumb_url'])) {
+				if (!$disk->exists(RC_Upload::upload_path($v['thumb_url'])) || empty($v['thumb_url'])) {
 					$goods_photo_list[$k]['thumb_url'] = RC_Uri::admin_url('statics/images/nopic.png');
 				} else {
 					$goods_photo_list[$k]['thumb_url'] = RC_Upload::upload_url($v['thumb_url']);
@@ -359,12 +360,12 @@ class merchant extends ecjia_merchant {
 			$this->assign('cat_html', $cat_html);
 		}
 		if (!empty($cat_id)) {
-			$merchant_cat = merchant_cat_list(0, 0, true, 2);		//店铺分类
+			$merchant_cat = merchant_cat_list(0, 0, true, 2, false);		//店铺分类
 			$ur_here = '基本信息';
 			$this->assign('step', 2);
 			$this->assign('merchant_cat', $merchant_cat);
 		} else {
-			$cat_list = cat_list(0, 0, false, 1);	//平台分类
+			$cat_list = cat_list(0, 0, false, 1, false);	//平台分类
 			$ur_here = '选择商品分类';
 			$this->assign('step', 1);
 			$this->assign('cat_list', $cat_list);
@@ -540,7 +541,7 @@ class merchant extends ecjia_merchant {
 
 		/* 入库 */
 		$data = array(
-			'goods_name'            => $goods_name,
+			'goods_name'            => rc_stripslashes($goods_name),
 			'goods_name_style'      => $goods_name_style,
 			'goods_sn'              => $goods_sn,
 			'cat_id'                => $cat_id,				//平台分类id
@@ -917,7 +918,7 @@ class merchant extends ecjia_merchant {
 		}
 
 		$data = array(
-		  	'goods_name'				=> $goods_name,
+		  	'goods_name'				=> rc_stripslashes($goods_name),
 		  	'goods_name_style'	  		=> $goods_name_style,
 		  	'goods_sn'			  		=> $goods_sn,
 			'merchant_cat_id'			=> $merchant_cat_id,	//店铺分类id
@@ -989,9 +990,9 @@ class merchant extends ecjia_merchant {
 					return $this->showmessage($result->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
 				//删除生成的商品二维码
+				$disk = RC_Filesystem::disk();
 				$goods_qrcode = 'data/qrcodes/goods/goods_'.$goods_id.'.png';
-				if (file_exists(RC_Upload::upload_path($goods_qrcode))) {
-					$disk = RC_Filesystem::disk();
+				if ($disk->exists(RC_Upload::upload_path($goods_qrcode))) {
 					$disk->delete(RC_Upload::upload_path().$goods_qrcode);
 				}
 			}
@@ -1006,9 +1007,9 @@ class merchant extends ecjia_merchant {
 					return $this->showmessage($result->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 				}
 				//删除生成的商品二维码
+				$disk = RC_Filesystem::disk();
 				$goods_qrcode = 'data/qrcodes/goods/goods_'.$goods_id.'.png';
-				if (file_exists(RC_Upload::upload_path($goods_qrcode))) {
-					$disk = RC_Filesystem::disk();
+				if ($disk->exists(RC_Upload::upload_path($goods_qrcode))) {
 					$disk->delete(RC_Upload::upload_path().$goods_qrcode);
 				}
 			}
@@ -2078,7 +2079,7 @@ class merchant extends ecjia_merchant {
 			$href = RC_Uri::url('goods/merchant/init', array('extension_code' => $code));
 		}
 		$this->assign('action_link', array('href' => $href, 'text' => RC_Lang::get('system::system.01_goods_list')));
-		$this->assign('goods_type_list', goods_enable_type_list($goods['goods_type']), true);
+		$this->assign('goods_type_list', goods_enable_type_list($goods['goods_type'], true, true));
 		$this->assign('goods_attr_html', build_merchant_attr_html($goods['goods_type'], $goods_id));
 		
 		$this->assign('ur_here', RC_Lang::get('goods::goods.edit_goods_attr'));
@@ -2368,7 +2369,7 @@ class merchant extends ecjia_merchant {
 	public function get_cat_list() {
 		$cat_id = !empty($_POST['cat_id']) ? intval($_POST['cat_id']) : 0;
 		
-		$cat_list = RC_DB::table('category')->where('parent_id', $cat_id)->get();
+		$cat_list = RC_DB::table('category')->where('parent_id', $cat_id)->where('is_show', 1)->get();
 		return $this->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('content' => $cat_list));
 	}
 

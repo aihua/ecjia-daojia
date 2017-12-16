@@ -57,10 +57,10 @@ return array(
     //是否Gzip压缩后输出
     'gzip' 							=> 0, 					
     //密钥
-    'auth_key' 						=> 'UbGuq4G8uqk9yRKHhiRn', 
+    'auth_key' 						=> env('AUTH_KEY', 'UbGuq4G8uqk9yRKHhiRnUbGuq4G8uqk9'), 
 
-    //调试显示
-    'debug_display'                 => false, 
+    //调试开关
+    'debug'                         => false, 
 
 	'admin_entrance'				=> 'admincp',
 	

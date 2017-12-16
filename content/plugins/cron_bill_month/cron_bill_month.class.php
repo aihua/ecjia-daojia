@@ -49,18 +49,25 @@
  */
 defined('IN_ECJIA') or exit('No permission resources.');
 
-RC_Loader::load_app_class('cron_abstract', 'cron', false);
+use Ecjia\App\Cron\CronAbstract;
 
-class cron_bill_month extends cron_abstract
+class cron_bill_month extends CronAbstract
 {
     
     /**
      * 计划任务执行方法
      */
     public function run() {
+        $month =  RC_Time::local_date('m')-1;
+        if ($month < 10) {
+            $month = '0'.$month; 
+        }
+        $month = RC_Time::local_date('Y') . '-' . $month;
+        $options['month'] = $month;
+        
     	RC_Loader::load_app_class('store_bill', 'commission', false);
         $store_bill = new store_bill();
-        $store_bill->bill_month();
+        return $store_bill->bill_month($options);
     }
     
     /**

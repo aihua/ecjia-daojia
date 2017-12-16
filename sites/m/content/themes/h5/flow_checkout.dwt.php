@@ -32,7 +32,7 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 				<div class="ecjiaf-fl address-info">
 					<span>{$data.consignee.consignee|escape}</span>
 					<span>{$data.consignee.mobile}</span>
-					<p class="ecjia-truncate2 address-desc">{$data.consignee.address}{$data.consignee.address_info}</p>
+					<p class="ecjia-truncate2 address-desc">{$data.consignee.province_name}{$data.consignee.city_name}{$data.consignee.district_name}{$data.consignee.street_name} {$data.consignee.address}{$data.consignee.address_info}</p>
 				</div>
 				{else}
 				<p>已有地址超过配送范围，请重新选择或添加</p>
@@ -117,8 +117,10 @@ defined('IN_ECJIA') or header("HTTP/1.0 404 Not Found");exit('404 Not Found');
 			<a class="check_address" href='{url path="cart/flow/invoice" args="address_id={$address_id}&rec_id={$rec_id}"}'>
 				<span>发票信息<!-- invoice --></span>
 				<i class="iconfont icon-jiantou-right"></i>
-				<span class="ecjiaf-fr select_nav ecjia-truncate">{$temp.inv_payee}</span>
+				<span class="ecjiaf-fr select_nav ecjia-truncate">{if $temp.inv_type_name == 'personal'}个人{else if}{$temp.inv_payee}{/if}</span>
+				<input type="hidden" name="inv_title_type" value="{$temp.inv_type_name}" />
 				<input type="hidden" name="inv_payee" value="{$temp.inv_payee}" />
+				<input type="hidden" name="inv_tax_no" value="{$temp.inv_bill_code}" />
 				<input type="hidden" name="inv_content" value="{$temp.inv_content}" />
 				<input type="hidden" name="inv_type" value="{$temp.inv_type}" />
 			</a>

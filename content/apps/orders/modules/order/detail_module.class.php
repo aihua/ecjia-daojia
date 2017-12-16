@@ -69,7 +69,30 @@ class detail_module extends api_front implements api_interface {
 
 		/* 订单详情 */
 		$order = get_order_detail($order_id, $user_id, 'front');
-
+		if (is_ecjia_error($order)) {
+			return $order;
+		}
+		
+		/*发票抬头和发票识别码处理*/
+		if (!empty($order['inv_payee'])) {
+			if (strpos($order['inv_payee'],",") > 0) {
+				$inv = explode(',', $order['inv_payee']);
+				$order['inv_payee'] = $inv['0'];
+				$order['inv_tax_no'] = $inv['1'];
+				$order['inv_title_type'] = 'enterprise';
+			} else {
+				$order['inv_tax_no'] = '';
+				$order['inv_title_type'] = 'personal';
+			}
+		} 
+		
+		//获取支付方式的pay_code
+		if (!empty($order['pay_id'])) {
+			$order['pay_code'] = RC_DB::table('payment')->where('pay_id', $order['pay_id'])->pluck('pay_code');
+		} else {
+			$order['pay_code'] = '';
+		}
+		
 		if(is_ecjia_error($order)) {
 		    return $order;
 		}
@@ -82,79 +105,122 @@ class detail_module extends api_front implements api_interface {
 		$order['pay_status'] 		= intval($order['pay_status']);
 		$order['shipping_id'] 		= intval($order['shipping_id']);
 		$order['pay_id'] 			= intval($order['pay_id']);
+		$order['pay_code'] 			= trim($order['pay_code']);
 		$order['pack_id'] 			= intval($order['pack_id']);
 		$order['card_id'] 			= intval($order['card_id']);
 		$order['bonus_id'] 			= intval($order['bonus_id']);
 		$order['agency_id'] 		= intval($order['agency_id']);
 		$order['extension_id'] 		= intval($order['extension_id']);
 		$order['parent_id'] 		= intval($order['parent_id']);
-
+		$order['longitude']			= empty($order['longitude']) ? '' :trim($order['longitude']);
+		$order['latitude']			= empty($order['latitude']) ? '' :trim($order['latitude']);
+		$order['zipcode']			= empty($order['zipcode']) ? '' :trim($order['zipcode']);
+		$order['best_time']			= empty($order['best_time']) ? '' :trim($order['best_time']);
+		$order['sign_building']		= empty($order['sign_building']) ? '' :trim($order['sign_building']);
+		$order['how_surplus']		= empty($order['how_surplus']) ? '' :trim($order['how_surplus']);
+		$order['pack_name']		    = empty($order['pack_name']) ? '' :trim($order['pack_name']);
+		$order['card_name']		    = empty($order['card_name']) ? '' :trim($order['card_name']);
+		$order['to_buyer']		    = empty($order['to_buyer']) ? '' :trim($order['to_buyer']);
+		$order['pay_note']		    = empty($order['pay_note']) ? '' :trim($order['pay_note']);
+		$order['delete_time']		= empty($order['delete_time']) ? '' :trim($order['delete_time']);
+		$order['sign_time']		    = empty($order['sign_time']) ? '' :trim($order['sign_time']);
+		$order['how_surplus_name']	= empty($order['how_surplus_name']) ? '' :trim($order['how_surplus_name']);
+		
+		if ($order['pay_status'] == 2) {
+			$order['is_paid'] = 1;
+		} else{
+			$order['is_paid'] = 0;
+		}
+		
 		if ($order === false) {
 			return new ecjia_error(8, 'fail');
 		}
 		
-		/* 判断支付方式*/
-		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-		$shipping_info = $shipping_method->shipping_info($order['shipping_id']);
+		/* 判断配送方式*/
+// 		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+		$shipping_info = ecjia_shipping::pluginData($order['shipping_id']);
 		$order['shipping_code'] = $shipping_info['shipping_code'];
 		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
 			$express_info = RC_DB::table('express_order')->where('order_sn', $order['order_sn'])->orderBy('express_id', 'desc')->first();
 			$order['express_user'] = $express_info['express_user'];
-			$order['express_mobile'] = $express_info['express_mobile'];
+			$order['express_id'] = $express_info['express_id'];
+			//$order['express_mobile'] = $express_info['express_mobile'];
+			$order['express_mobile'] = $express_info['staff_id'] > 0 ? RC_DB::table('staff_user')->where('user_id', $express_info['staff_id'])->pluck('mobile') : '';
+		}
+		
+		/*提货信息*/
+		if ($shipping_info['shipping_code'] == 'ship_cac') {
+			$pickup_info = RC_DB::table('term_meta')
+							->where('object_id', $order['order_id'])
+							->where('object_group', 'order')
+							->where('meta_key', 'receipt_verification')
+							->first(); 
+			$order['pickup_code'] = $pickup_info['meta_value'];
+			if ($order['shipping_status'] > SS_UNSHIPPED) {
+				$order['pickup_status'] = 1;
+				$order['label_pickup_status'] = '已提取';
+				$order['pickup_code_expiretime'] = '';
+			} else{
+				$order['pickup_status'] = 0;
+				$order['label_pickup_status'] = '未提取';
+				$order['pickup_code_expiretime'] = '';
+			}
 		}
 		
 		//收货人地址
-		$db_region = RC_Model::model('shipping/region_model');
-		$region_name = $db_region->in(array('region_id' => array($order['country'], $order['province'], $order['city'], $order['district'])))->order('region_type')->select();
+		$order['country'] = ecjia_region::getRegionName($order['country']);
+		$order['province'] = ecjia_region::getRegionName($order['province']);
+		$order['city'] = ecjia_region::getRegionName($order['city']);
+		$order['district'] = ecjia_region::getRegionName($order['district']);
+		$order['street'] = ecjia_region::getRegionName($order['street']);
 
-		$order['country']	= $region_name[0]['region_name'];
-		$order['province']	= $region_name[1]['region_name'];
-		$order['city']		= $region_name[2]['region_name'];
-		$order['district']	= $region_name[3]['region_name'];
+		$goods_list = array();
 		$goods_list = EM_order_goods($order_id);
+		
+		/*店铺有关信息*/
+		if ($order['store_id'] > 0) {
+			$seller_info = RC_DB::table('store_franchisee')->where('store_id', $order['store_id'])->first();
+		}
+		$order['seller_id']		= !empty($seller_info['store_id']) ? intval($seller_info['store_id']) : 0;
+		$order['seller_name']	= !empty($seller_info['merchants_name']) ? $seller_info['merchants_name'] : '';
+		$order['manage_mode']	= $seller_info['manage_mode'];
+		$order['service_phone']		= RC_DB::table('merchants_config')->where('store_id', $order['store_id'])->where('code', 'shop_kf_mobile')->pluck('value');
 
-		foreach ($goods_list as $k => $v) {
-			if ($k == 0) {
-				if ($v['store_id'] > 0) {
-					$seller_info = RC_DB::table('store_franchisee')->where(RC_DB::raw('store_id'), $v['store_id'])->select('merchants_name', 'manage_mode')->first();
-				}
-
-				$order['seller_id']		= isset($v['store_id']) ? intval($v['store_id']) : 0;
-				$order['seller_name']	= isset($seller_info['merchants_name']) ? $seller_info['merchants_name'] : '自营';
-				$order['manage_mode']	= $seller_info['manage_mode'];
-				$order['service_phone']		= RC_DB::table('merchants_config')->where(RC_DB::raw('store_id'), $v['store_id'])->where(RC_DB::raw('code'), 'shop_kf_mobile')->pluck('value');
-			}
-			$attr = array();
-			if (!empty($v['goods_attr'])) {
-				$goods_attr = explode("\n", $v['goods_attr']);
-				$goods_attr = array_filter($goods_attr);
-				foreach ($goods_attr as  $val) {
-					$a = explode(':',$val);
-					if (!empty($a[0]) && !empty($a[1])) {
-						$attr[] = array('name'=>$a[0], 'value'=>$a[1]);
+		if (!empty($goods_list)) {
+			foreach ($goods_list as $k => $v) {
+				$attr = array();
+				if (!empty($v['goods_attr'])) {
+					$goods_attr = explode("\n", $v['goods_attr']);
+					$goods_attr = array_filter($goods_attr);
+					foreach ($goods_attr as  $val) {
+						$a = explode(':',$val);
+						if (!empty($a[0]) && !empty($a[1])) {
+							$attr[] = array('name'=>$a[0], 'value'=>$a[1]);
+						}
 					}
 				}
-			}
-
-			$goods_list[$k] = array(
-			    'rec_id'		=> $v['rec_id'],
-				'goods_id'		=> $v['goods_id'],
-				'name'			=> $v['goods_name'],
-			    'goods_attr_id'	=> $v['goods_attr_id'],
-			    'goods_attr'	=> $attr,
-				'goods_number'	=> $v['goods_number'],
-				'subtotal'		=> price_format($v['subtotal'], false),
-				'formated_shop_price' => $v['goods_price'] > 0 ? price_format($v['goods_price'], false) : __('免费'),
-				'is_commented'	=> $v['is_commented'],
-			    'comment_rank'  => $v['comment_rank'],
-			    'comment_content' => $v['comment_content'],
-				'img' => array(
-					'small'	=> !empty($v['goods_thumb']) ? RC_Upload::upload_url($v['goods_thumb']) : '',
-					'thumb'	=> !empty($v['goods_img']) ? RC_Upload::upload_url($v['goods_img']) : '',
-					'url' 	=> !empty($v['original_img']) ? RC_Upload::upload_url($v['original_img']) : '',
-				)
-			);
+			
+				$goods_list[$k] = array(
+						'rec_id'		=> $v['rec_id'],
+						'goods_id'		=> $v['goods_id'],
+						'name'			=> $v['goods_name'],
+						'goods_attr_id'	=> $v['goods_attr_id'],
+						'goods_attr'	=> $attr,
+						'goods_number'	=> $v['goods_number'],
+						'subtotal'		=> price_format($v['subtotal'], false),
+						'formated_shop_price' => $v['goods_price'] > 0 ? price_format($v['goods_price'], false) : __('免费'),
+						'is_commented'	=> $v['is_commented'],
+						'comment_rank'  => empty($v['comment_rank']) ? 0 : intval($v['comment_rank']),
+						'comment_content' => empty($v['comment_content']) ? '' : $v['comment_content'],
+						'img' => array(
+								'small'	=> !empty($v['goods_thumb']) ? RC_Upload::upload_url($v['goods_thumb']) : '',
+								'thumb'	=> !empty($v['goods_img']) ? RC_Upload::upload_url($v['goods_img']) : '',
+								'url' 	=> !empty($v['original_img']) ? RC_Upload::upload_url($v['original_img']) : '',
+						)
+				);
+			}	
 		}
+		
 		$order['goods_list'] = $goods_list;
 
 		$order_status_log = RC_Model::model('orders/order_status_log_model')->where(array('order_id' => $order_id))->order(array('log_id' => 'desc'))->select();

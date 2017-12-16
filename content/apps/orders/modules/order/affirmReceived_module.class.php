@@ -90,7 +90,7 @@ class affirmReceived_module extends api_front implements api_interface {
 function affirm_received($order_id, $user_id = 0) {
     $db = RC_Model::model('orders/order_info_model');
     /* 查询订单信息，检查状态 */
-    $order = $db->field('user_id, order_sn, order_status, shipping_status, pay_status, shipping_id')->find(array('order_id' => $order_id));
+    $order = $db->field('user_id, order_sn, order_status, shipping_status, pay_status, shipping_id, pay_id')->find(array('order_id' => $order_id));
 
     // 如果用户ID大于 0 。检查订单是否属于该用户
     if ($user_id > 0 && $order['user_id'] != $user_id) {
@@ -106,7 +106,7 @@ function affirm_received($order_id, $user_id = 0) {
         //如果货到付款，修改付款状态为已付款
         if ($order['pay_id']) {
             $payment = RC_DB::table('payment')->where('pay_id', $order['pay_id'])->first();
-            if ($payment['is_cod'] == 1) {
+            if ($payment['is_cod'] == '1') {
                 $data['pay_status'] = PS_PAYED;
             }
         }
@@ -142,9 +142,37 @@ function affirm_received($order_id, $user_id = 0) {
             	
             	$express_order_viewdb = RC_Model::model('express/express_order_viewmodel');
             	$where = array('staff_id' => $express_info['staff_id'], 'express_id' => $express_info['express_id']);
-            	$field = 'eo.*, oi.add_time as order_time, oi.pay_time, oi.order_amount, oi.pay_name, sf.merchants_name, sf.address as merchant_address, sf.longitude as merchant_longitude, sf.latitude as merchant_latitude';
+            	$field = 'eo.*, oi.add_time as order_time, oi.pay_time, oi.order_amount, oi.pay_name, oi.shipping_id, oi.invoice_no, sf.merchants_name, sf.address as merchant_address, sf.longitude as merchant_longitude, sf.latitude as merchant_latitude';
             	$express_order_info = $express_order_viewdb->field($field)->join(array('delivery_order', 'order_info', 'store_franchisee'))->where($where)->find();
             		
+            	//短信发送
+            	if (!empty($express_order_info['express_mobile'])) {
+            		$options = array(
+            				'mobile' => $express_order_info['express_mobile'],
+            				'event'	 => 'sms_express_confirm',
+            				'value'  =>array(
+            						'express_sn'   => $express_order_info['express_sn'],
+            						'service_phone'=> ecjia::config('service_phone'),
+            				),
+            		);
+            		RC_Api::api('sms', 'send_event_sms', $options);
+            	}
+            		
+            	//推送消息
+            	$options = array(
+            		'user_id'   => $express_info['staff_id'],
+            		'user_type' => 'merchant',
+            		'event'     => 'express_confirm',
+            		'value' => array(
+            			'express_sn'    => $express_order_info['express_sn'],
+            			'service_phone' => ecjia::config('service_phone'),
+            		),
+            		'field' => array(
+            			'open_type' => 'admin_message',
+            		),
+            	);
+            	RC_Api::api('push', 'push_event_send', $options);
+      
             	$express_data = array(
             		'title'     => '配送成功',
             		'body'      => '买家已成功确认收货！配送单号为：'.$express_order_info['express_id'],
@@ -177,22 +205,21 @@ function affirm_received($order_id, $user_id = 0) {
             	);
             	$express_finished = new ExpressFinished($express_data);
             	RC_Notification::send($user, $express_finished);
+
             	RC_DB::table('express_order')->where('express_id', $express_info['express_id'])->update(array('status' => 5, 'signed_time' => RC_Time::gmtime()));
             	
-            	/*推送消息*/
-            	$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $express_info['staff_id']));
-            	if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-            		$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'express_confirm', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
-            		if (!empty($push_event)) {
-            			RC_Loader::load_app_class('push_send', 'push', false);
-            			ecjia_admin::$controller->assign('express_info', $express_order_info);
-            			$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
-            			 
-            			if ($devic_info['device_client'] == 'android') {
-            				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-            			} elseif ($devic_info['device_client'] == 'iphone') {
-            				$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-            			}
+            	/*当订单配送方式为o2o速递时,记录o2o速递物流信息*/
+            	if ($express_order_info['shipping_id'] > 0) {
+//             		$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+            		$shipping_info = ecjia_shipping::pluginData($express_order_info['shipping_id']);
+            		if ($shipping_info['shipping_code'] == 'ship_o2o_express') {
+            			$data = array(
+            					'express_code' => $shipping_info['shipping_code'],
+            					'track_number' => $express_order_info['invoice_no'],
+            					'time'		   => RC_Time::local_date(ecjia::config('time_format'), RC_Time::gmtime()),
+            					'context'	   => '买家已成功确认收货！',
+            			);
+            			RC_DB::table('express_track_record')->insert($data);
             		}
             	}
             	

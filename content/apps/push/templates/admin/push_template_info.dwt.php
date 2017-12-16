@@ -8,6 +8,13 @@
 <!-- {/block} -->
 
 <!-- {block name="main_content"} -->
+{if !$template_code_list}
+<div class="alert">
+	<a class="close" data-dismiss="alert">×</a>
+	<strong>温馨提示：</strong>暂时未有消息模板可添加。
+</div>
+{/if}
+
 <div>
 	<h3 class="heading">
 		<!-- {if $ur_here}{$ur_here}{/if} -->
@@ -22,35 +29,48 @@
 		<form id="form-privilege" class="form-horizontal" name="theForm"  method="post" action="{$form_action}">
 			<fieldset>
 				<div class="control-group formSep">
-					<label class="control-label">{lang key='push::push.label_msg_template'}</label>
-					<div class="controls users">
-						<input type="text" name="template_code" id="template_code" value="{$template.template_code}" class="span4"/>
-						<span class="input-must">{lang key='system::system.require_field'}</span>
+					<label class="control-label">消息事件：</label>
+					<div class="controls">
+						<select name="template_code" class="span6" id="template_code">
+	                        <option value='0'>请选择</option>
+	        				<!-- {html_options options=$template_code_list selected=$data.template_code} -->
+						</select>
 					</div>
 				</div>
+								
 				<div class="control-group formSep">
-					<label class="control-label">{lang key='push::push.label_msg_subject'}</label>
+					<label class="control-label">消息主题：</label>
 					<div class="controls">
-						<input type="text" name="subject" id="subject" value="{$template.template_subject}" class="span4"/>
+						<input type="text" name="subject" id="subject" value="{$data.template_subject}" class="span6"/>
 						<span class="input-must">{lang key='system::system.require_field'}</span>
 					</div>
 				</div>
 				
 				<div class="control-group formSep">
-					<label class="control-label">{lang key='push::push.label_msg_content'}</label>
+					<label class="control-label">模板内容：</label>
 					<div class="controls">
-					<textarea class="span11 h200" name="content" id="content" rows="16" >{$template.template_content}</textarea>
-					<span class="input-must">{lang key='system::system.require_field'}</span>
+						<textarea class="span6 h200" name="content" id="content" >{$data.template_content}</textarea>
+						<span class="input-must">{lang key='system::system.require_field'}</span>
+						<span class="help-block">
+							{if $desc}
+								<!-- {foreach from=$desc item=list} -->
+									{$list}<br>
+								<!-- {/foreach} -->
+							{/if}
+						
+						</span>
 					</div>
 				</div>
+
 				<div class="control-group">
 					<div class="controls">
-					<input type="hidden" value="{$template.template_code}" name="old_template_code"/>
-					<input type="hidden" value="{$template.template_id}" name="id"/>
+						<input type="hidden" value="{$data.id}" name="id"/>
+						<input type="hidden" value="{url path='push/admin_template/ajax_event'}" id="data-href"/>
+						<input type="hidden" value="{$channel_code}" name="channel_code" id="channel_code"/>
 						{if $action eq "insert"}
 						<button class="btn btn-gebo" type="submit">{lang key='system::system.button_submit'}</button>
 						{else}
-						<button class="btn btn-gebo" type="submit">{lang key='push::push.update'}</button>
+						<button class="btn btn-gebo" type="submit">更新</button>
 						{/if}
 					</div>
 				</div>

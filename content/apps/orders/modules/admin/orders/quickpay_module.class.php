@@ -99,44 +99,43 @@ class quickpay_module extends api_admin implements api_interface {
 		}
 
 		/* 获取商家或平台的地址 作为收货地址 */
-		$region = RC_Loader::load_app_model('region_model','shipping');
-		if ($_SESSION['ru_id'] > 0){
-			$msi_dbview = RC_Loader::load_app_model('merchants_shop_information_viewmodel', 'seller');
-			$where = array();
-			$where['ssi.status'] = 1;
-			$where['msi.merchants_audit'] = 1;
-			$where['msi.user_id'] = $_SESSION['ru_id'];
-			$info = $msi_dbview->join(array('category', 'seller_shopinfo'))
-			->field('ssi.*')
-			->where($where)
-			->find();
-			$region_info = array(
-					'country'			=> $info['country'],
-					'province'			=> $info['province'],
-					'city'				=> $info['city'],
-					'address'			=> $info['shop_address'],
-			);
+		if ($_SESSION['store_id'] > 0){
+			//RC_Loader::load_app_func('merchant_store','store');
+			//$info = get_store_full_info($_SESSION['store_id']);
+			$info = RC_DB::table('store_franchisee')->where('store_id', $_SESSION['store_id'])->first();
+        	$region_info = array(
+    			'country'			=> ecjia::config('shop_country'),
+    			'province'			=> empty($info['province']) 	? '' : $info['province'],
+    			'city'				=> empty($info['city']) 		? '' : $info['city'],
+    			'district'		    => empty($info['district'])     ? '' : $info['district'],
+    			'street'		    => empty($info['street'])       ? '' : $info['street'],
+    			
+       			'address'			=> empty($info['address']) 		? '' : $info['address'],
+    			'longitude'			=> empty($info['longitude'])    ? '' : $info['longitude'],
+    			'latitude'			=> empty($info['latitude']) 	? '' : $info['latitude'],
+        	);
 			$consignee = array_merge($consignee, $region_info);
 		} else {
 			$region_info = array(
-					'country'			=> ecjia::config('shop_country'),
-					'province'			=> ecjia::config('shop_province'),
-					'city'				=> ecjia::config('shop_city'),
-					'address'			=> ecjia::config('shop_address'),
+				'country'			=> ecjia::config('shop_country'),
+				'province'			=> ecjia::config('shop_province'),
+				'city'				=> ecjia::config('shop_city'),
+				'address'			=> ecjia::config('shop_address'),
 			);
 			$consignee = array_merge($consignee, $region_info);
 		}
 
 		$order = array(
-				'user_id' => $_SESSION['user_id'],
-				'pay_id' 		=> intval($pay_id),
-				'goods_amount' 	=> isset($amount) ? floatval($amount) : '0.00',
-				'money_paid' 	=> 0,
-				'order_amount' 	=> isset($amount) ? floatval($amount) : '0.00',
-				'add_time' 		=> RC_Time::gmtime(),
-				'order_status'  => OS_CONFIRMED,
-				'shipping_status'=> SS_UNSHIPPED,
-				'pay_status' 	=> PS_UNPAYED,
+			'user_id' => $_SESSION['user_id'],
+			'pay_id' 		=> intval($pay_id),
+			'goods_amount' 	=> isset($amount) ? floatval($amount) : '0.00',
+			'money_paid' 	=> 0,
+			'order_amount' 	=> isset($amount) ? floatval($amount) : '0.00',
+			'add_time' 		=> RC_Time::gmtime(),
+			'order_status'  => OS_CONFIRMED,
+			'shipping_status'=> SS_UNSHIPPED,
+			'pay_status' 	=> PS_UNPAYED,
+			'store_id'		=> $_SESSION['store_id'],
 // 				'agency_id' => get_agency_by_regions(array(
 // 						$consignee['country'],
 // 						$consignee['province'],
@@ -150,10 +149,10 @@ class quickpay_module extends api_admin implements api_interface {
 			$order[$key] = addslashes($value);
 		}
 
-		$payment_method = RC_Loader::load_app_class('payment_method','payment');
+// 		$payment_method = RC_Loader::load_app_class('payment_method','payment');
 		/* 支付方式 */
 		if ($pay_id > 0) {
-			$payment = $payment_method->payment_info_by_id($order['pay_id']);
+			$payment = with(new Ecjia\App\Payment\PaymentPlugin)->getPluginDataById($order['pay_id']);
 			$order['pay_name'] = addslashes($payment['pay_name']);
 		}
 		
@@ -178,16 +177,16 @@ class quickpay_module extends api_admin implements api_interface {
 		if ($new_order_id > 0) {
 			$db_order_goods = RC_Loader::load_app_model('order_goods_model','orders');
 			$arr = array(
-					'order_id' 		=> $new_order_id,
-					'goods_id' 		=> '0',
-					'goods_name' 	=> '收银台快捷收款',
-					'goods_sn' 		=> '',
-					'product_id' 	=> '0',
-					'goods_number' 	=> '1',
-					'market_price' 	=> '0.00',
-					'goods_price' 	=> isset($amount) ? floatval($amount) : '0.00',
-					'goods_attr' 	=> '',
-					'is_real' 		=> '1',
+				'order_id' 		=> $new_order_id,
+				'goods_id' 		=> '0',
+				'goods_name' 	=> '收银台快捷收款',
+				'goods_sn' 		=> '',
+				'product_id' 	=> '0',
+				'goods_number' 	=> '1',
+				'market_price' 	=> '0.00',
+				'goods_price' 	=> isset($amount) ? floatval($amount) : '0.00',
+				'goods_attr' 	=> '',
+				'is_real' 		=> '1',
 			);
 // 			if ($_SESSION['store_id'] > 0) {
 // 				$arr['store_id'] = $_SESSION['store_id'];
@@ -195,33 +194,51 @@ class quickpay_module extends api_admin implements api_interface {
 			$order_goods_id = $db_order_goods->insert($arr);
 		}
 		
+		//TODO收银员操作日志
+// 		if ($new_order_id > 0 && $order_goods_id > 0) {
+// 			$adviser_log = array(
+// 				'adviser_id' => $_SESSION['adviser_id'],
+// 				'order_id'	 => $new_order_id,
+// 				'device_id'	 => $_SESSION['device_id'],
+// 				'type'   	 => '2',//收款
+// 				'add_time'	 => RC_Time::gmtime(),
+// 			);
+// 			$adviser_log_id = RC_Model::model('achievement/adviser_log_model')->insert($adviser_log);
+// 		}
+		
+// 		/* 插入支付日志 */
+// 		$order['log_id'] = $payment_method->insert_pay_log($new_order_id, $order['order_amount'], PAY_ORDER);
+// 		$payment_info = $payment_method->payment_info_by_id($pay_id);
+
+		/*收银员操作日志*/
 		if ($new_order_id > 0 && $order_goods_id > 0) {
-			$adviser_log = array(
-				'adviser_id' => $_SESSION['adviser_id'],
-				'order_id'	 => $new_order_id,
-				'device_id'	 => $_SESSION['device_id'],
-				'type'   	 => '2',//收款
-				'add_time'	 => RC_Time::gmtime(),
+			$device_info = RC_DB::table('mobile_device')->where('id', $_SESSION['device_id'])->first();
+			$cashier_record = array(
+				'store_id' 			=> $_SESSION['store_id'],
+				'staff_id'			=> $_SESSION['staff_id'],
+				'order_id'	 		=> $new_order_id,
+				'order_type' 		=> 'ecjia-cashdesk',
+				'mobile_device_id'	=> empty($_SESSION['device_id']) ? 0 : $_SESSION['device_id'],
+				'device_sn'			=> empty($device_info['device_udid']) ? '' : $device_info['device_udid'],
+				'device_type'		=> 'ecjia-cashdesk',
+				'action'   	 		=> 'receipt', //收款
+				'create_at'	 		=> RC_Time::gmtime(),
 			);
-			$adviser_log_id = RC_Model::model('achievement/adviser_log_model')->insert($adviser_log);
+			RC_DB::table('cashier_record')->insert($cashier_record);
 		}
 		
-		/* 插入支付日志 */
-		$order['log_id'] = $payment_method->insert_pay_log($new_order_id, $order['order_amount'], PAY_ORDER);
-		$payment_info = $payment_method->payment_info_by_id($pay_id);
-
 		$subject = '收银台快捷收款￥'.floatval($amount).'';
 		$out = array(
-				'order_sn' => $order['order_sn'],
-				'order_id' => $new_order_id,
-				'order_info' => array(
-						'pay_code' 		=> $payment_info['pay_code'],
-						'order_amount' 	=> $order['order_amount'],
-						'order_id' 		=> $new_order_id,
-						'subject' 		=> $subject,
-						'desc' 			=> $subject,
-						'order_sn' 		=> $order['order_sn']
-				)
+			'order_sn' => $order['order_sn'],
+			'order_id' => $new_order_id,
+			'order_info' => array(
+				'pay_code' 		=> $payment['pay_code'],
+				'order_amount' 	=> $order['order_amount'],
+				'order_id' 		=> $new_order_id,
+				'subject' 		=> $subject,
+				'desc' 			=> $subject,
+				'order_sn' 		=> $order['order_sn']
+			)
 		);
 		return $out;
 	}

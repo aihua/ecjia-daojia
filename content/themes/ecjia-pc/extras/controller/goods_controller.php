@@ -59,8 +59,7 @@ class goods_controller {
         ecjia_front::$controller->assign('info', $general_info);
         
         if (!ecjia_front::$controller->is_cached('goods_list.dwt', $cache_id)) {
-            $store = RC_DB::table('store_franchisee')->where('city', $_COOKIE['city_id'])->where('shop_close', 0)->where('status', 1)->get();
-            $has_store = !empty($store) ? true : false;
+            $has_store = pc_function::has_store();
             ecjia_front::$controller->assign('has_store', $has_store);
 
             if ($has_store) {
@@ -86,7 +85,7 @@ class goods_controller {
 	            }
 	            
 	            $page = !empty($_GET['page']) ? intval($_GET['page']) : 1;
-	            $type = !empty($_GET['type']) ? trim($_GET['type']) : 'hot';
+	            $type = !empty($_GET['type']) ? trim($_GET['type']) : '';
 	            
 	            $goods_options['page'] = $page;
 	            $goods_options['size'] = 9;
@@ -97,18 +96,24 @@ class goods_controller {
 	                $goods_options['sort'] = array($sort_by => $sort_order);
 	                ecjia_front::$controller->assign('sort_by', $sort_by);
 	                ecjia_front::$controller->assign('sort_order', $sort_order);
+	            } else {
+	            	$goods_options['sort'] = array('g.sort_order' => 'asc');
 	            }
+
 	            if ($type == 'hot') {
 	                $goods_options['intro'] = 'hot';
 	            }
+	            //这里city_id在goods_list_api已处理
 	            if (!empty($_COOKIE['city_id'])) {
 	                $goods_options['city_id'] = $_COOKIE['city_id'];
 	            } else {
 	                $goods_options['city_id'] = 0;
 	            }
+
 	            $goods_result = RC_Api::api('goods', 'goods_list', $goods_options);
 	            $pages = $goods_result['page']->show(2);
 	            
+	            ecjia_front::$controller->assign('type', $type);
 	            ecjia_front::$controller->assign('keywords', $keywords);
 	            ecjia_front::$controller->assign('page', $pages);
 	            ecjia_front::$controller->assign('goods_list', $goods_result['list']);
@@ -126,6 +131,7 @@ class goods_controller {
 	                $seller_group = array_unique($seller_group);
 	                $db_goods_data->whereIn('store_id', $seller_group);
 	            }
+	            $disk = RC_Filesystem::disk();
 	            $store_list = $db_goods_data->select('store_id', RC_DB::raw('AVG(goods_rank) as "goods_rank"'))->groupBy('store_id')->orderBy('goods_rank', 'desc')->take(3)->get();
 	            if (!empty($store_list)) {
 	                foreach ($store_list as $k => $v) {
@@ -153,7 +159,7 @@ class goods_controller {
 	                    
 	                    if (!empty($info)) {
 	                        $info = array_merge($info, $store_config);
-	                        $info['seller_logo'] = empty($info['shop_logo']) || !file_exists($info['shop_logo']) ? '' : RC_Upload::upload_url($info['shop_logo']);
+	                        $info['seller_logo'] = empty($info['shop_logo']) || !$disk->exists($info['shop_logo']) ? '' : RC_Upload::upload_url($info['shop_logo']);
 	                        $store_list[$k]['order_amount'] = RC_DB::table('order_info')->where('store_id', $v['store_id'])->where('order_status', 5)->where('shipping_status', 2)->where('pay_status', 2)->count();
 	                        $store_list[$k]['store_info'] = $info;
 	                    } else {
@@ -179,8 +185,7 @@ class goods_controller {
             $goods_id = !empty($_GET['goods_id']) ? intval($_GET['goods_id']) : 0;
             $goods_info = RC_DB::table('goods')->where('goods_id', $goods_id)->select('goods_id', 'store_id', 'goods_name', 'market_price', 'shop_price', 'promote_price', 'goods_thumb', 'goods_desc', 'cat_id', 'keywords', 'goods_brief')->first();
             
-            $store = RC_DB::table('store_franchisee')->where('city', $_COOKIE['city_id'])->where('shop_close', 0)->where('store_id', $goods_info['store_id'])->first();
-            $has_store = !empty($store) ? true : false;
+            $has_store = pc_function::has_store();
             ecjia_front::$controller->assign('has_store', $has_store);
             
             if ($has_store) {
@@ -241,8 +246,9 @@ class goods_controller {
 	                $goods_info['favourable_list'] = $favourable_list;
 	            }
 	            
+	            $disk = RC_Filesystem::disk();
 	            $default_image = RC_Theme::get_template_directory_uri() . '/images/mobile_app_icon.png';
-	            $goods_logo = !empty($goods_info['goods_thumb']) && file_exists(RC_Upload::upload_path($goods_info['goods_thumb'])) ? RC_Upload::upload_path($goods_info['goods_thumb']) : $default_image;
+	            $goods_logo = !empty($goods_info['goods_thumb']) && $disk->exists(RC_Upload::upload_path($goods_info['goods_thumb'])) ? RC_Upload::upload_path($goods_info['goods_thumb']) : $default_image;
 	            $goods_info['url'] = with(new Ecjia\App\Mobile\Qrcode\GenerateGoods($goods_id,  $goods_logo))->getQrcodeUrl();
 	            
 	            $shop_info = merchant_function::get_merchant_info($store_id);

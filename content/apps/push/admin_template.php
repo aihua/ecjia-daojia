@@ -48,15 +48,16 @@ defined('IN_ECJIA') or exit('No permission resources.');
 
 /**
  * ECJIA消息模板模块
+ * @author songqian
  */
 class admin_template extends ecjia_admin {
-	private $db_mail;
 	
 	public function __construct() {
 		parent::__construct();
 		
-		$this->db_mail = RC_Model::model('push/mail_templates_model');
-	
+		RC_Loader::load_app_func('global');
+		assign_adminlog_content();
+		
 		RC_Script::enqueue_script('tinymce');
 		RC_Style::enqueue_style('chosen');
 		RC_Style::enqueue_style('uniform-aristo');
@@ -67,90 +68,182 @@ class admin_template extends ecjia_admin {
 		RC_Script::enqueue_script('jquery-form');
 		RC_Script::enqueue_script('smoke');
 		
+		RC_Script::enqueue_script('jquery.toggle.buttons', RC_Uri::admin_url('statics/lib/toggle_buttons/jquery.toggle.buttons.js'));
+		RC_Style::enqueue_style('bootstrap-toggle-buttons', RC_Uri::admin_url('statics/lib/toggle_buttons/bootstrap-toggle-buttons.css'));
+		RC_Script::enqueue_script('bootstrap-editable.min', RC_Uri::admin_url('statics/lib/x-editable/bootstrap-editable/js/bootstrap-editable.min.js'));
+		RC_Style::enqueue_style('bootstrap-editable', RC_Uri::admin_url('statics/lib/x-editable/bootstrap-editable/css/bootstrap-editable.css'));
+		RC_Script::enqueue_script('bootstrap-placeholder');
 		RC_Script::enqueue_script('jquery-dataTables-bootstrap');
-		RC_Script::enqueue_script('push_template', RC_App::apps_url('statics/js/push_template.js', __FILE__), array(), false, false);
-		
-		RC_Script::localize_script('push_template', 'js_lang', RC_Lang::get('push::push.js_lang'));
-		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('push::push.msg_template'), RC_Uri::url('push/admin_template/init')));
-	}
 
+		RC_Script::enqueue_script('push_template', RC_App::apps_url('statics/js/push_template.js', __FILE__), array(), false, false);
+		RC_Script::localize_script('push_template', 'js_lang', RC_Lang::get('sms::sms.js_lang'));
+		
+		RC_Script::enqueue_script('push_events', RC_App::apps_url('statics/js/push_events.js', __FILE__), array(), false, false);
+	
+		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('消息模板', RC_Uri::url('push/admin_template/init')));
+	}
+	
 	/**
 	 * 消息模板
 	 */
 	public function init () {
 		$this->admin_priv('push_template_manage');
 		
-		$this->assign('ur_here', RC_Lang::get('push::push.msg_template'));
-		$this->assign('action_link', array('href' => RC_Uri::url('push/admin_template/add'), 'text' => RC_Lang::get('push::push.add_msg_template')));
 		ecjia_screen::get_current_screen()->remove_last_nav_here();
-		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('push::push.msg_template')));
-
-        $data = RC_DB::table('mail_templates')->where('type', 'push')->select('template_id', 'template_code', 'template_subject', 'template_content')->get();
-		$this->assign('templates', $data);
+		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('消息模板'));
+	
+		$this->assign('ur_here', '消息模板');
+		$this->assign('action_link_event', array('href'=>RC_Uri::url('push/admin_events/init'), 'text' => '消息事件列表'));
+		$this->assign('action_link', array('href'=>RC_Uri::url('push/admin_template/add',array('channel_code' => 'push_umeng')), 'text' => '添加消息模板'));
+		
+// 		$data = RC_DB::table('notification_channels')->where('channel_type', 'push')->orderby('sort_order', 'asc')->get();
+// 		$this->assign('data', $data);
+		
+// 		$channel_code = $_GET['channel_code'];
+// 		if (empty($channel_code) && !empty($data)) {
+// 			$channel_code = head($data)['channel_code'];
+// 		}
+// 		$this->assign('channel_code', $channel_code);
+		
+		$templatedb = RC_DB::table('notification_templates');
+		$template = $templatedb
+		->select('id', 'template_code', 'template_subject', 'template_content')
+		->where('channel_type', 'push')
+		->where('channel_code', 'push_umeng')
+		->orderby('id', 'desc')
+		->get();
+		$this->assign('template', $template);
 
 		$this->display('push_template_list.dwt');
 	}
-	
+
 	/**
 	 * 添加模板页面
 	 */
 	public function add() {
 		$this->admin_priv('push_template_update');
+
+		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('消息模板'));
 	
-		$this->assign('ur_here', RC_Lang::get('push::push.add_msg_template'));
-		$this->assign('action_link', array('href' => RC_Uri::url('push/admin_template/init'), 'text' => RC_Lang::get('push::push.msg_template_list')));
-		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('push::push.add_msg_template')));
+		$this->assign('ur_here', '添加消息模板');
+		$this->assign('action_link', array('href'=>RC_Uri::url('push/admin_template/init',array('channel_code' => $_GET['channel_code'])), 'text' => '消息模板列表'));
 		
+		$template_code_list = $this->template_code_list();
+		$existed = RC_DB::TABLE('notification_templates')->where('channel_code', $_GET['channel_code'])->select('template_code','template_subject')->get();
+		if (!empty($existed)) {
+			foreach ($existed as $value) {
+				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';
+			}
+			$res = array_diff($template_code_list,$existed_list);
+			unset($template_code_list);
+			$template_code_list = $res;
+		}
+		$this->assign('template_code_list', $template_code_list);
+		
+		$channel_code = trim($_GET['channel_code']);
+		$this->assign('channel_code', $channel_code);
+	
 		$this->assign('form_action', RC_Uri::url('push/admin_template/insert'));
 		$this->assign('action', 'insert');
 		
 		$this->display('push_template_info.dwt');
 	}
 	
+	public function ajax_event(){
+
+	    $filter = $_POST['JSON'];
+	    $code = trim($filter['code']);
+	    $channel_code = trim($filter['channel_code']);
+	    $event = with(new Ecjia\App\Push\EventFactory)->event($code);
+
+	    $desc = [];
+	    $getValueHit = $event->getValueHit();
+	    if (!empty($getValueHit)) {
+	    	$desc[] = '可用变量：'.$getValueHit;
+	    }
+	    $desc[] = '变量使用说明：变量不限位置摆放，可自由摆放，但变量不可自定义名称，需保持与以上名称一致。';
+	    	    
+	    $template = $event->getTemplate();
+	    return $this->showmessage('', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('content' => $desc, 'template' => $template));
+	}
+	
+	
 	/**
 	 * 添加模板处理
 	 */
 	public function insert() {
-		$this->admin_priv('push_template_update', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('push_template_update');
 		
-		$template_code = trim($_POST['template_code']);
+		$template_code = $_POST['template_code'];
 		$subject       = trim($_POST['subject']);
 		$content       = trim($_POST['content']);
-
-        $titlecount = RC_DB::table('mail_templates')->where('template_code', $template_code)->where('type', 'push')->count();
-		if($titlecount > 0) {
-			return $this->showmessage(RC_Lang::get('push::push.template_name_exist'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+		$channel_code  = $_POST['channel_code'];
+		
+		if (empty($template_code)) {
+			return $this->showmessage('请选择消息事件', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+		}
+		
+		$query = RC_DB::table('notification_templates')->where('channel_type', 'push')->where('channel_code', $channel_code)->where('template_code', $template_code)->count();
+		if ($query > 0) {
+			return $this->showmessage('该消息模板代号在该渠道下已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 		}
 		
 		$data = array(
 			'template_code'    => $template_code,
 			'template_subject' => $subject,
 			'template_content' => $content,
+			'content_type'	   => 'text',
 			'last_modify'      => RC_Time::gmtime(),
-			'type'             => 'push'
+			'channel_type'     => 'push',
+			'channel_code'	   => $channel_code,
 		);
+		$id = RC_DB::table('notification_templates')->insertGetId($data);
 		
-		$tid = $this->db_mail->template_manage($data);
-		
-		$links[] = array('text' => RC_Lang::get('push::push.back_template_list'), 'href' => RC_Uri::url('push/admin_template/init'));
-		$links[] = array('text' => RC_Lang::get('push::push.continue_add_template'), 'href' => RC_Uri::url('push/admin_template/add'));
-		return $this->showmessage(RC_Lang::get('push::push.add_template_success'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('links' => $links, 'pjaxurl' => RC_Uri::url('push/admin_template/edit', array('id' => $tid))));
+		ecjia_admin::admin_log($subject, 'add', 'push_template');
+		return $this->showmessage('添加消息模板成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('push/admin_template/edit', array('id' => $id, 'channel_code' => $channel_code, 'event_code' => $template_code))));
 	}
 	
 	/**
-	 * 模版修改
+	 * 模板修改
 	 */
 	public function edit() {
 		$this->admin_priv('push_template_update');
 
-		$this->assign('ur_here', RC_Lang::get('push::push.edit_msg_template'));
-		$this->assign('action_link', array('href' => RC_Uri::url('push/admin_template/init'), 'text' => RC_Lang::get('push::push.msg_template_list')));
-		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here(RC_Lang::get('push::push.edit_msg_template')));
+		ecjia_screen::get_current_screen()->add_nav_here(new admin_nav_here('消息模板'));
 		
-		$tid = intval($_GET['id']);
-        $template = RC_DB::table('mail_templates')->where('template_id', $tid)->first();
+		$this->assign('ur_here', '编辑消息模板');
+		$this->assign('action_link', array('href' => RC_Uri::url('push/admin_template/init',array('channel_code'=>$_GET['channel_code'])), 'text' => '消息模板列表'));
+	
+		$template_code_list = $this->template_code_list();
+		$existed = RC_DB::TABLE('notification_templates')->where('channel_code', $_GET['channel_code'])->where('template_code', '!=', $_GET['event_code'])->select('template_code','template_subject')->get();
+		if (!empty($existed)) {
+			foreach ($existed as $value) {
+				$existed_list[$value['template_code']] = $value['template_subject']. ' [' .  $value['template_code'] . ']';
+			}
+			$res = array_diff($template_code_list, $existed_list);
+			$template_code_list = $res;
+		}
 		
-		$this->assign('template', $template);
+		$this->assign('template_code_list', $template_code_list);
+
+		$id = intval($_GET['id']);
+		$data = RC_DB::table('notification_templates')->where('id', $id)->first();
+		$this->assign('data', $data);
+		
+		$channel_code = trim($_GET['channel_code']);
+		$this->assign('channel_code', $channel_code);
+		
+		$event_code = trim($_GET['event_code']);
+		$event = with(new Ecjia\App\Push\EventFactory)->event($event_code);
+		
+		$desc = [];
+		$getValueHit = $event->getValueHit();
+		if (!empty($getValueHit)) {
+			$desc[] = '可用变量：'.$getValueHit;
+		}
+		$desc[] = '变量使用说明：变量不限位置摆放，可自由摆放，但变量不可自定义名称，需保持与以上名称一致。';
+		$this->assign('desc', $desc);
+		
 		$this->assign('form_action', RC_Uri::url('push/admin_template/update'));
 		
 		$this->display('push_template_info.dwt');
@@ -160,45 +253,129 @@ class admin_template extends ecjia_admin {
 	 * 保存模板内容
 	 */
 	public function update() {
-		$this->admin_priv('push_template_update', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('push_template_update');
 		
-		$id				= intval($_POST['id']);
-		$template_code 	= trim($_POST['template_code']);
-		$subject       	= trim($_POST['subject']);
-		$content       	= trim($_POST['content']);
+		$id = intval($_POST['id']);
+		$template_code = $_POST['template_code'];
+		$subject       = trim($_POST['subject']);
+		$content       = trim($_POST['content']);
+		$channel_code  = $_POST['channel_code'];
 	
-		$old_template_code = trim($_POST['old_template_code']);
-		if ($template_code != $old_template_code) {
-            $titlecount = RC_DB::table('mail_templates')->where('template_code', $template_code)->where('type', 'push')->count();
-			if ($titlecount > 0) {
-				return $this->showmessage(RC_Lang::get('push::push.template_name_exist'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
-			}
+		if (empty($template_code)) {
+			return $this->showmessage('请选择消息事件', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
 		}
-
+		
+		$query = RC_DB::table('notification_templates')->where('channel_type', 'push')->where('channel_code', $channel_code)->where('template_code', $template_code)->where('id', '!=', $id)->count();
+    	if ($query > 0) {
+    		return $this->showmessage('该消息模板代号在该渠道下已存在', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+    	}
 		$data = array(
-			'template_id' 	   => $id,
 			'template_code'    => $template_code,
 			'template_subject' => $subject,
 			'template_content' => $content,
 			'last_modify'      => RC_Time::gmtime(),
-			'type'             => 'push'
 		);
+		RC_DB::table('notification_templates')->where('id', $id)->update($data);
 		
-		$this->db_mail->template_manage($data);
-	  	return $this->showmessage(RC_Lang::get('push::push.update_template_success'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS);
-
+		ecjia_admin::admin_log($subject, 'edit', 'push_template');
+	  	return $this->showmessage('编辑消息模板成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS,array('pjaxurl' => RC_Uri::url('push/admin_template/edit', array('id' => $id, 'channel_code' => $channel_code, 'event_code' => $template_code))));
 	}
+	/**
+	 * 测试消息模板
+	 */
+	public function test() {
+		$this->admin_priv('push_template_update');
+		
+		$this->assign('ur_here', '测试消息模板');
+		$this->assign('action_link', array('href' => RC_Uri::url('push/admin_template/init',array('channel_code'=>$_GET['channel_code'])), 'text' => '消息模板列表'));
+		
+		//判断渠道
+		$channel_code = trim($_GET['channel_code']);
+		$this->assign('channel_code', $channel_code);
+
+		$id = intval($_GET['id']);
+		$data = RC_DB::table('notification_templates')->where('id', $id)->first();
+		
+		$template_content = $data['template_content'];
+		preg_match_all ("|{(.*)}|U", $template_content, $ok);
+		$variable =$ok[1];
+		$this->assign('variable', $variable);
+		$this->assign('data', $data);
+
+		$this->assign('form_action', RC_Uri::url('push/admin_template/test_request'));
+		
+		$this->display('push_template_test.dwt');
+			
+	}
+	
+	public function test_request() {
+		$this->admin_priv('push_template_update');
+		$data = $_POST['data'];
+		foreach ($data as $row) {
+			if (empty($row)) {
+				return $this->showmessage('模板变量不能为空', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+			}
+		}
+
+		$admin_id  = intval($_POST['admin_id']);
+		$uid       = intval($_POST['user_id']);
+		$merchant_user_id = intval($_POST['merchant_user_id']);
+		if (!empty($admin_id)) {
+			$user_id = $admin_id;
+		} elseif (!empty($uid)) {
+			$user_id = $uid;
+		} elseif (!empty($merchant_user_id)) {
+			$user_id = $merchant_user_id;
+		} else{
+			return $this->showmessage('请选择推送对象', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+		}
+		$options = array(
+			'user_id'   => $user_id,
+			'user_type' => $_POST['target'],
+			'event'     => $_POST['template_code'],
+			'value' 	=> $data,
+			'field' 	=> array(),
+		);
+		$response  = RC_Api::api('push', 'push_event_send', $options);
+		if (is_ecjia_error($response)) {
+			return $this->showmessage($response->get_error_message(), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_ERROR);
+		} else {
+			return $this->showmessage('消息模板推送成功，请注意查收', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS);
+		}
+	}
+	
 	
 	/**
 	 * 删除消息模板
 	 */
 	public function remove() {
-		$this->admin_priv('push_template_delete', ecjia::MSGTYPE_JSON);
+		$this->admin_priv('push_template_delete');
 	
 		$id = intval($_GET['id']);
-        RC_DB::table('mail_templates')->where('template_id', $id)->delete();
-        return $this->showmessage(RC_Lang::get('push::push.remove_template_success'), ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS);
+
+		$info = RC_DB::TABLE('notification_templates')->where('id', $id)->select('template_subject')->first();
+		RC_DB::table('notification_templates')->where('id', $id)->delete();
+		 
+		ecjia_admin::admin_log($info['template_subject'], 'remove', 'push_template');
+		return $this->showmessage('删除短信模板成功', ecjia::MSGTYPE_JSON | ecjia::MSGSTAT_SUCCESS, array('pjaxurl' => RC_Uri::url('push/admin_template/init', array('id' => $id, 'channel_code'=>$_GET['channel_code']))));
 	}
+	
+	/**
+	 * 获取模板code
+	 */
+	private function template_code_list() {
+		
+		$template_code_list = array();
+		
+		$factory = new Ecjia\App\Push\EventFactory();
+		
+		$events = $factory->getEvents();
+		foreach ($events as $event) {
+		    $template_code_list[$event->getCode()] = $event->getName() . ' [' . $event->getCode() . ']';
+		}
+		return $template_code_list;
+	}
+
 }
 
 //end

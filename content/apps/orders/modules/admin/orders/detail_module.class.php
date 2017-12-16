@@ -56,13 +56,20 @@ class detail_module extends api_admin implements api_interface {
 		$this->authadminSession();
         if ($_SESSION['admin_id'] <= 0 && $_SESSION['staff_id'] <= 0) {
             return new ecjia_error(100, 'Invalid session');
+        } 
+        
+        $device = $this->device;
+        $codes = array('8001', '8011');
+        if (!in_array($device['device_code'], $codes)) {
+        	$result = $this->admin_priv('order_view');
+        	if (is_ecjia_error($result)) {
+        		return $result;
+        	}
         }
-		$result = $this->admin_priv('order_view');
- 		if (is_ecjia_error($result)) {
- 			return $result;
- 		}
+		
 		$order_id = $this->requestData('id', 0);
 		$order_sn = $this->requestData('order_sn');
+		
 
  		if (empty($order_id) && empty($order_sn)) {
  			return new ecjia_error(101, '参数错误');
@@ -71,7 +78,29 @@ class detail_module extends api_admin implements api_interface {
 
 		/* 订单详情 */
 		$order = RC_Api::api('orders', 'order_info', array('order_id' => $order_id, 'order_sn' => $order_sn, 'store_id' => $_SESSION['store_id']));
-
+		if (is_ecjia_error($order)) {
+			return $order;
+		}
+		$db_term_meta = RC_DB::table('term_meta');
+		$verify_code = $db_term_meta->where('object_type', 'ecjia.order')->where('object_group', 'order')->where('meta_key', 'receipt_verification')->where('object_id', $order['order_id'])->pluck('meta_value');
+		$order['verify_code'] = empty($verify_code) ? '' : $verify_code;
+		
+		/*提货码验证状态*/
+		if (!empty($verify_code)) {
+			if ($order['shipping_status'] > SS_UNSHIPPED) {
+				$order['check_status'] = 1; 
+			} else {
+				$order['check_status'] = 0;
+			}
+		}
+		
+		$codes = array('8001', '8011');
+		
+		if (in_array($device['code'], $codes)) {
+			//$order['adviser_name'] = RC_Model::model('orders/adviser_log_viewmodel')->join(array('adviser'))->where(array('al.order_id' => $order['order_id']))->get_field('username');
+			$order['cashier_name'] = RC_DB::table('cashier_record as cr')->leftJoin('staff_user as su', RC_DB::raw('cr.staff_id'), '=', RC_DB::raw('su.user_id'))->where(RC_DB::raw('cr.order_id'), $order['order_id'])->pluck('name');
+		}
+		
 		$order['label_order_source'] = '';
 		/*订单来源返回处理*/
 		if (!empty($order['referer'])) {
@@ -86,27 +115,41 @@ class detail_module extends api_admin implements api_interface {
  			return $order;
 		}
 		
+		/*发票抬头和发票识别码处理*/
+		if (!empty($order['inv_payee'])) {
+			if (strpos($order['inv_payee'],",") > 0) {
+				$inv = explode(',', $order['inv_payee']);
+				$order['inv_payee'] = $inv['0'];
+				$order['inv_tax_no'] = $inv['1'];
+				$order['inv_title_type'] = 'enterprise';
+			} else {
+				$order['inv_tax_no'] = '';
+				$order['inv_title_type'] = 'personal';
+			}
+		}
+		
 		$db_user = RC_Model::model('user/users_model');
 		$user_name = $db_user->where(array('user_id' => $order['user_id']))->get_field('user_name');
 
 		$order['user_name'] = empty($user_name) ? __('匿名用户') : $user_name;
-		//收货人地址
-		$db_region = RC_Model::model('shipping/region_model');
-		$region_name = $db_region->where(array('region_id' => array('in'=>$order['country'], $order['province'], $order['city'], $order['district'])))->order('region_type')->select();
-		$order['country_id']  = $order['country'];
-		$order['country']     = $region_name[0]['region_name'];
-		$order['province_id'] = $order['province'];
-		$order['province']    = $region_name[1]['region_name'];
-		$order['city_id']     = $order['city'];
-		$order['city']        = $region_name[2]['region_name'];
-		$order['district_id'] = $order['district'];
-		$order['district']    = isset($region_name[3]) ? $region_name[3]['region_name'] : '';
 
-		$order['invoice_no']            = !empty($order['invoice_no']) ? explode('<br>', $order['invoice_no']) : array();
+		$order['country_id']  = $order['country'];
+		$order['province_id'] = $order['province'];
+		$order['city_id']     = $order['city'];
+		$order['district_id'] = $order['district'];
+		$order['street_id']   = $order['street'];
+
+		$order['country']     = ecjia_region::getCountryName($order['country']);
+		$order['province']    = ecjia_region::getRegionName($order['province']);
+		$order['city']        = ecjia_region::getRegionName($order['city']);
+		$order['district']    = ecjia_region::getRegionName($order['district']);
+		$order['street']      = ecjia_region::getRegionName($order['street']);
+
+		$order['invoice_no'] = !empty($order['invoice_no']) ? explode('<br>', $order['invoice_no']) : array();
 		
-		$payment_method = RC_Loader::load_app_class('payment_method', 'payment');
+// 		$payment_method = RC_Loader::load_app_class('payment_method', 'payment');
 		if ($order['pay_id'] > 0) {
-		    $payment = $payment_method->payment_info_by_id($order['pay_id']);
+		    $payment = with(new Ecjia\App\Payment\PaymentPlugin)->getPluginDataById($order['pay_id']);
 		}
 		if (in_array($order['order_status'], array(OS_CONFIRMED, OS_SPLITED)) &&
 		    in_array($order['shipping_status'], array(SS_RECEIVED)) &&
@@ -206,6 +249,7 @@ class detail_module extends api_admin implements api_interface {
 				$goods_list[$k] = array(
 					'id'					=> $v['goods_id'],
 					'name'					=> $v['goods_name'],
+					'goods_sn'				=> $v['goods_sn'],
 					'goods_number'			=> $v['goods_number'],
 					'subtotal'				=> price_format($v['subtotal'], false),
 					'goods_attr'			=> trim($v['goods_attr']),

@@ -104,7 +104,7 @@ return array(
 	'label_operable_act'	=> '当前可执行操作：',
 	'label_action_note' 	=> '操作备注：',
 	'label_invoice_note' 	=> '发货备注：',
-	'label_invoice_no' 		=> '发货单号：',
+	'label_invoice_no' 		=> '运单编号：',
 	'label_cancel_note'	 	=> '取消原因：',
 	'notice_cancel_note' 	=> '（会记录在商家给客户的留言中）',
 	'pay_order'				=> '支付订单 %s',
@@ -204,6 +204,7 @@ return array(
 	'label_sign_building' 	=> '标志性建筑：',
 	'label_best_time' 		=> '最佳送货时间：',
 	'label_inv_type' 		=> '发票类型：',
+	'label_inv_tax_no' 		=> '发票识别码：',
 	'label_inv_payee' 		=> '发票抬头：',
 	'label_inv_content' 	=> '发票内容：',
 	'label_postscript' 		=> '客户给商家的留言：',
@@ -837,6 +838,7 @@ return array(
     'return_integral_on_cancel' 	=> '取消订单 %s，退回支付订单时使用的积分',
     'buyer_cancel' 					=> '用户取消',
     'self'							=> '自营',
+    'validate_order'				=> '验单查询',
 );
 
 // end

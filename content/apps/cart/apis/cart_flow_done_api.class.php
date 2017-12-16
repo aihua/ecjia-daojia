@@ -133,7 +133,7 @@ class cart_flow_done_api extends Component_Event_Api {
 				$_cart_goods_stock[$value['rec_id']] = $value['goods_number'];
 			}
 			$result = cart::flow_cart_stock($_cart_goods_stock);
-			if (is_ecjia_error($result)) {
+			if (is_ecjia_error($result)) {				
 				return $result;
 			}
 			unset($cart_goods_stock, $_cart_goods_stock);
@@ -199,9 +199,10 @@ class cart_flow_done_api extends Component_Event_Api {
 		}
 	
 		if (isset($is_real_good)) {
-			$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-			$data = $shipping_method->shipping_info($order['shipping_id']);
-			if (empty($data['shipping_id'])) {
+// 			$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+			$order['shipping_id'] = intval($order['shipping_id']);
+// 			$data = $shipping_method->shipping_info($order['shipping_id']);
+			if (! ecjia_shipping::isEnabled($order['shipping_id'])) {
 				return new ecjia_error('shipping_error', '请选择一个配送方式！');
 			}
 		}
@@ -224,8 +225,8 @@ class cart_flow_done_api extends Component_Event_Api {
 
 		/* 配送方式 */
 		if ($order['shipping_id'] > 0) {
-			$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
-			$shipping = $shipping_method->shipping_info($order['shipping_id']);
+// 			$shipping_method = RC_Loader::load_app_class('shipping_method', 'shipping');
+			$shipping = ecjia_shipping::pluginData($order['shipping_id']);
 			$order['shipping_name'] = addslashes($shipping['shipping_name']);
 		}
 		$order['shipping_fee'] = $total['shipping_fee'];
@@ -283,11 +284,14 @@ class cart_flow_done_api extends Component_Event_Api {
 
 		$parent_id = 0;
 		$order['parent_id'] = $parent_id;
+		/*发票识别码和抬头类型*/
+		$inv_tax_no = $order['inv_tax_no'];
+		$inv_title_type = $order['inv_title_type'];
 
 		/* 插入订单表 */
 		$order['order_sn'] = cart::get_order_sn(); // 获取新订单号
 		//$db_order_info	= RC_Model::model('orders/order_info_model');
-		$db_order_info = RC_DB::table('order_info');
+
 		/*过滤没有的字段*/
 		unset($order['need_inv']);
 		unset($order['need_insure']);
@@ -298,10 +302,43 @@ class cart_flow_done_api extends Component_Event_Api {
 		unset($order['latitude']);
 		unset($order['address_info']);
 		unset($order['cod_fee']);
+		unset($order['inv_tax_no']);
+		unset($order['inv_title_type']);
 		
-		$new_order_id	= $db_order_info->insertGetId($order);
+		$new_order_id = RC_DB::table('order_info')->insertGetId($order);
 		$order['order_id'] = $new_order_id;
-
+		
+		if (!empty($order['inv_payee'])) {
+			$inv_payee = explode(',', $order['inv_payee']);
+			$order['inv_payee'] = $inv_payee['0'];
+		} else {
+			$order['inv_payee'] = '';
+		}
+		
+		if (!empty($inv_title_type)) {
+			if ($inv_title_type == 'personal') {
+				$inv_title_type_new = 'PERSONAL';
+			} elseif ($inv_title_type == 'enterprise') {
+				$inv_title_type_new = 'CORPORATION';
+			}
+			$finance_invoice_info = RC_DB::table('finance_invoice')->where('title_type', $inv_title_type_new)->where('user_id', $_SESSION['user_id'])->where('tax_register_no', $inv_tax_no)->first();
+			if (empty($finance_invoice_info)) {
+				/*插入财务发票表*/
+				$inv_data = array(
+					'user_id' 			=> $_SESSION['user_id'],
+					'title_name' 		=> $order['inv_payee'],
+					'title_type' 		=> $inv_title_type_new,
+					'user_mobile' 		=> $order['mobile'],
+					'tax_register_no'	=> $inv_tax_no,
+					'user_address'		=> $order['address'],
+					'add_time'			=> RC_Time::gmtime(),
+					'is_default'		=> 1,
+					'status'		    => 0,
+				);
+				RC_DB::table('finance_invoice')->insert($inv_data);
+			}
+		}
+		
 		/* 插入订单商品 */
 		//$db_order_goods = RC_Model::model('orders/order_goods_model');
 		//$db_goods_activity = RC_Model::model('goods/goods_activity_model');
@@ -346,7 +383,7 @@ class cart_flow_done_api extends Component_Event_Api {
 				/* 库存不足删除已生成的订单（并发处理） will.chen*/
 				//$db_order_info->where(array('order_id' => $order['order_id']))->delete();
 				//$db_order_goods->where(array('order_id' => $order['order_id']))->delete();
-				$db_order_info->where('order_id', $order['order_id'])->delete();
+				RC_DB::table('order_info')->where('order_id', $order['order_id'])->delete();
 				$db_order_goods->where('order_id', $order['order_id'])->delete();
 				return $result;
 			}
@@ -378,57 +415,44 @@ class cart_flow_done_api extends Component_Event_Api {
 		/* 给商家发邮件 */
 		/* 增加是否给客服发送邮件选项 */
 		if (ecjia::config('send_service_email') && ecjia::config('service_email') != '') {
-			$tpl_name = 'remind_of_new_order';
-			$tpl   = RC_Api::api('mail', 'mail_template', $tpl_name);
-
-			ecjia_front::$controller->assign('order', $order);
-			ecjia_front::$controller->assign('goods_list', $cart_goods);
-			ecjia_front::$controller->assign('shop_name', ecjia::config('shop_name'));
-			ecjia_front::$controller->assign('send_date', date(ecjia::config('time_format')));
-
-			$content = ecjia_front::$controller->fetch_string($tpl['template_content']);
-			RC_Mail::send_mail(ecjia::config('shop_name'), ecjia::config('service_email'), $tpl['template_subject'], $content, $tpl['is_html']);
-		}
-
-		$result = ecjia_app::validate_application('sms');
-		if (!is_ecjia_error($result)) {
-			/* 如果需要，发短信 */
-			$staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
-			if (ecjia::config('sms_order_placed')== '1' && !empty($staff_user['mobile'])) {
-				//发送短信
-// 				$tpl_name = 'order_placed_sms';
-// 				$tpl   = RC_Api::api('sms', 'sms_template', $tpl_name);
-// 				if (!empty($tpl)) {
-// 					ecjia_front::$controller->assign('order',	$order);
-// 					ecjia_front::$controller->assign('consignee', $order['consignee']);
-// 					ecjia_front::$controller->assign('mobile',	$order['mobile']);
-					
-// 					$content = ecjia_front::$controller->fetch_string($tpl['template_content']);
-// 					$msg = $order['pay_status'] == PS_UNPAYED ? $content : $content.__('已付款');
-					
-// 					$params = array(
-// 							'mobile' 		=> $staff_user['mobile'],
-// 							'msg'			=> $msg,
-// 							'template_id' 	=> $tpl['template_id'],
-// 					);
-// 					$response = RC_Api::api('sms', 'sms_send', $params);
-// 				}
-// 			'有客户下单啦！快去看看吧！订单编号：${order_sn}，收货人：${consignee}，联系电话：${mobile}，订单金额：${order_amount}。
-				
-				$options = array(
-					'mobile' => $staff_user['mobile'],
-					'event'	 => 'sms_order_placed',
-					'value'  =>array(
-						'order_sn'		=> $order['order_sn'],
-						'consignee' 	=> $order['consignee'],
-						'telephone'  	=> $order['mobile'],
-						'order_amount'  => $order['order_amount'],
-						'service_phone' => ecjia::config('service_phone'),
-					),
-				);
-				$response = RC_Api::api('sms', 'send_event_sms', $options);
+			try {
+				$tpl_name = 'remind_of_new_order';
+				$tpl   = RC_Api::api('mail', 'mail_template', $tpl_name);
+	
+				ecjia_front::$controller->assign('order', $order);
+				ecjia_front::$controller->assign('goods_list', $cart_goods);
+				ecjia_front::$controller->assign('shop_name', ecjia::config('shop_name'));
+				ecjia_front::$controller->assign('send_date', date(ecjia::config('time_format')));
+	
+				$content = ecjia_front::$controller->fetch_string($tpl['template_content']);
+				RC_Mail::send_mail(ecjia::config('shop_name'), ecjia::config('service_email'), $tpl['template_subject'], $content, $tpl['is_html']);
+			} catch (PDOException $e) {
+				RC_Logger::getLogger('info')->error($e);
 			}
 		}
+
+		/* 如果需要，发短信 */
+		$staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
+		if (!empty($staff_user['mobile'])) {
+			try {
+			    //发送短信
+			    $options = array(
+			        'mobile' => $staff_user['mobile'],
+			        'event'	 => 'sms_order_placed',
+			        'value'  =>array(
+			            'order_sn'		=> $order['order_sn'],
+			            'consignee' 	=> $order['consignee'],
+			            'telephone'  	=> $order['mobile'],
+			            'order_amount'  => $order['order_amount'],
+			            'service_phone' => ecjia::config('service_phone'),
+			        ),
+			    );
+			    RC_Api::api('sms', 'send_event_sms', $options);
+		    } catch (PDOException $e) {
+		    	RC_Logger::getLogger('info')->error($e);
+		    }
+		}
+		
 		/* 如果订单金额为0 处理虚拟卡 */
 		if ($order['order_amount'] <= 0) {
 			$rec_type = $options['flow_type'];
@@ -529,6 +553,7 @@ class cart_flow_done_api extends Component_Event_Api {
 				'order_sn'               => $order['order_sn']
 			)
 		);
+		
 		RC_DB::table('order_status_log')->insert(array(
 			'order_status'	=> RC_Lang::get('cart::shopping_flow.label_place_order'),
 			'order_id'		=> $order['order_id'],
@@ -556,14 +581,13 @@ class cart_flow_done_api extends Component_Event_Api {
 		
 		/* 客户下单通知（默认通知店长）*/
 		/* 获取店长的记录*/
-		$devic_info = $staff_user = array();
+// 		$devic_info = $staff_user = array();
 		$staff_user = RC_DB::table('staff_user')->where('store_id', $order['store_id'])->where('parent_id', 0)->first();
 		if (!empty($staff_user)) {
-			$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_user['user_id']));
-			/* 通知记录*/
+// 			$devic_info = RC_Api::api('mobile', 'device_info', array('user_type' => 'merchant', 'user_id' => $staff_user['user_id']));
+// 			/* 通知记录*/
 			$orm_staff_user_db = RC_Model::model('express/orm_staff_user_model');
 			$staff_user_ob = $orm_staff_user_db->find($staff_user['user_id']);
-			
 			$order_data = array(
 			    'title'	=> '客户下单',
 			    'body'	=> '您有一笔新订单，订单号为：'.$order['order_sn'],
@@ -581,24 +605,47 @@ class cart_flow_done_api extends Component_Event_Api {
 			
 			$push_order_placed = new OrderPlaced($order_data);
 			RC_Notification::send($staff_user_ob, $push_order_placed);
-		}
-		
-		if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
-			$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_placed', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
-			
-			if (!empty($push_event)) {
-				
-				RC_Loader::load_app_class('push_send', 'push', false);
-				ecjia_admin::$controller->assign('order', $order);
-				$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
-					
-				if ($devic_info['device_client'] == 'android') {
-					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-				} elseif ($devic_info['device_client'] == 'iphone') {
-					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
-				}
+
+			try {
+				//新的推送消息方法
+				$options = array(
+					'user_id'   => $staff_user['user_id'],
+					'user_type' => 'merchant',
+					'event'     => 'order_placed',
+					'value' => array(
+						'order_sn'     => $order['order_sn'],
+						'consignee'    => $order['consignee'],
+						'telephone'    => $order['mobile'],
+						'order_amount' => $order['order_amount'],
+						'service_phone'=> ecjia::config('service_phone'),
+					),
+					'field' => array(
+						'open_type' => 'admin_message',
+					),
+				);
+				RC_Api::api('push', 'push_event_send', $options);
+			} catch (PDOException $e) {
+				RC_Logger::getLogger('info')->error($e);
 			}
 		}
+		
+// 		if (!is_ecjia_error($devic_info) && !empty($devic_info)) {
+// 			$push_event = RC_Model::model('push/push_event_viewmodel')->where(array('event_code' => 'order_placed', 'is_open' => 1, 'status' => 1, 'mm.app_id is not null', 'mt.template_id is not null', 'device_code' => $devic_info['device_code'], 'device_client' => $devic_info['device_client']))->find();
+			
+// 			if (!empty($push_event)) {
+				
+// 				RC_Loader::load_app_class('push_send', 'push', false);
+// 				ecjia_admin::$controller->assign('order', $order);
+// 				$content = ecjia_admin::$controller->fetch_string($push_event['template_content']);
+					
+// 				if ($devic_info['device_client'] == 'android') {
+// 					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_ANDROID)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 				} elseif ($devic_info['device_client'] == 'iphone') {
+// 					$result = push_send::make($push_event['app_id'])->set_client(push_send::CLIENT_IPHONE)->set_field(array('open_type' => 'admin_message'))->send($devic_info['device_token'], $push_event['template_subject'], $content, 0, 1);
+// 				}
+// 			}
+// 		}
+
 		return $order_info;
 	}
 }

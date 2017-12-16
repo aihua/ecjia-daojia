@@ -53,16 +53,18 @@ defined('IN_ECJIA') or exit('No permission resources.');
  * @return  array
  */
 function get_article_info($article_id) {
-	$db = RC_Model::model('article/article_viewmodel');
-	$db->view = array(
-		'comment'  => array(
-		'type'     => Component_Model_View::TYPE_LEFT_JOIN,
-		'alias'    => 'r',
-		'field'    => 'a.*, IFNULL(AVG(r.comment_rank), 0) AS comment_rank',
-		'on'       => 'r.id_value = a.article_id AND comment_type = 1',
-		),
-	);
-	$row = $db->group('a.article_id')->find(array('a.article_approved' => 1, 'a.article_id' => $article_id));
+	//文章信息
+	$row = RC_DB::table('article')->where('article_id', $article_id)->where('article_approved', 1)->first();
+	
+	//评论等级
+	$comment_info = RC_DB::table('comment')
+	    ->selectRaw('IFNULL(AVG(comment_rank), 0) AS comment_rank')
+	    ->where('id_value', $article_id)
+	    ->where('comment_type', 1)
+	    ->first();
+	$row['comment_rank'] = $comment_info['comment_rank'];   
+
+
 	if ($row !== false) {
 		/* 用户评论级别取整  */
 		$row['comment_rank'] = ceil($row['comment_rank']);
@@ -87,7 +89,6 @@ function get_cat_type_info ($article_type = 'merchant_notice', $article_id = 0) 
 	$info['cat_type'] = 0;
 	if (!empty($article_id)) {
 		$info = RC_DB::table('article as a')
-		->leftJoin('article_cat as ac', RC_DB::raw('a.cat_id'), '=', RC_DB::raw('ac.cat_id'))
 		->where(RC_DB::raw('a.article_id'), $article_id)
 		->selectRaw('a.*')
 		->first();

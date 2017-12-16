@@ -54,6 +54,7 @@ return array(
 	'user_surplus' 	=> '预付款',
 	'surplus_id' 	=> '编号',
 	'user_id' 		=> '会员名称',
+	'order_sn'		=> '订单编号',
 	'surplus_amount'=> '金额',
 	'add_date' 		=> '操作日期',
 	'pay_mothed' 	=> '支付方式',
@@ -83,6 +84,7 @@ return array(
 	'surplus_edit' 			=> '编辑申请',
 	'attradd_succed' 		=> '您此次操作已成功！',
 	'username_not_exist' 	=> '您输入的会员名称不存在！',
+	'userinfo_not_exist' 	=> '您输入的手机号码对应的会员信息不存在！',
 	'cancel_surplus' 		=> '您确定要取消这条记录吗?',
 	'surplus_amount_error' 	=> '要提现的金额超过了此会员的帐户余额，此操作将不可进行！',
 	'edit_surplus_notic' 	=> '现在的状态已经是 已完成，如果您要修改，请先将之设置为 未确认',
@@ -107,6 +109,8 @@ return array(
 	),
 	
 	'recharge_withdrawal_apply' 		=> '充值提现申请',
+	'recharge_apply' 					=> '充值申请',
+	'withdrawal_apply' 					=> '提现申请',
 	'log_username' 						=> '会员名称是',
 	'batch_deletes_ok' 					=> '批量删除成功',
 	'update_recharge_withdrawal_apply' 	=> '更新充值提现申请',
@@ -147,6 +151,13 @@ return array(
 	'select_operate_item'		=> '请先选择需要操作的项',
 	'withdraw_apply'			=> '提现申请',
 	'pay_apply'					=> '充值申请',
+	'recharge_order'			=> '充值订单',
+	'withdraw_apply'			=> '提现申请',
+	'min_amount_error'			=> '充值或提现金额最低一元起',
+	'user_mobile'				=> '会员手机号码',
+	'back_recharge_list'		=> '返回充值订单',
+	'back_withdraw_list'		=> '返回提现申请',
+	'user_keyword'				=> '请输入会员手机号或名称等关键字'
 	
 );
 

@@ -3,7 +3,7 @@
 
 <!-- {block name="footer"} -->
 <script type="text/javascript">
-	ecjia.admin.push_send.init();
+	ecjia.admin.push_action.init();
 </script>
 <!-- {/block} -->
 
@@ -11,9 +11,7 @@
 <div>
 	<h3 class="heading">
 		<!-- {if $ur_here}{$ur_here}{/if} -->
-		<!-- {if $action_link} -->
 		<a href="{$action_link.href}" class="btn plus_or_reply data-pjax"><i class="fontello-icon-reply"></i>{$action_link.text}</a>
-		<!-- {/if} -->
 	</h3>
 </div>
 
@@ -23,342 +21,160 @@
 			<fieldset>
 				<div class="row-fluid edit-page">
 					<div class="control-group formSep">
-						<label class="control-label">{lang key='push::push.label_msg_subject'}</label>
+						<label class="control-label">消息主题：</label>
 						<div class="controls">
-							<input type="text" name="title" value="{$push.title}"/>
+							<input type="text" name="title" class="span6" value="{$push.title}"/>
 							<span class="input-must">{lang key='system::system.require_field'}</span>
 							<span class="help-block">{lang key='push::push.msg_subject_help'}</span>
 						</div>
 					</div>
 					<div class="control-group">
-						<label class="control-label">{lang key='push::push.label_msg_content'}</label>
+						<label class="control-label">消息内容：</label>
 						<div class="controls">
 							<textarea class="span8" name="content">{$push.content}</textarea>
 							<span class="input-must">{lang key='system::system.require_field'}</span>
 							<span class="help-block">{lang key='push::push.msg_content_help'}</span>
 						</div>
 					</div>
-	
-					<h3 class="heading">{lang key='push::push.push_behavior'}</h3>
-					<div class="control-group" >
-						<label class="control-label">{lang key='push::push.label_open_action'}</label>
-						<div class="controls chk_radio">
-							<div>
-								<div class="choose">
-									<label class="nomargin">
-										<input type="radio" class="uni_style" name="action" value="main" {if $extradata.open_type eq 'main'}checked{/if}/><span>{lang key='push::push.main_page'}</span>
-									</label>
+											
+					
+					<h3 class="heading">推送产品</h3>
+					{if $product_device_list}
+						<!-- {foreach from=$product_device_list item=list} -->
+							<div class="outline" >
+								<div class="push_radio">
+									<input type="radio" class="uni_style" name="push_product_device" value="{$list.device_code}" {if $list.device_code eq $push.device_code}checked="true"{/if}/>
+								</div>
+								<div class="outline-left"><img src="{$list.icon}" /></div>
+								<div class="outline-right">
+									<h4>{$list.app_name}</h4>
+									<span>{$list.client_name}</span>
 								</div>
 							</div>
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="singin" {if $extradata.open_type eq 'singin'}checked{/if}/><span>{lang key='push::push.singin'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="signup" {if $extradata.open_type eq 'signup'}checked{/if}/><span>{lang key='push::push.signup'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="forget_password" {if $extradata.open_type eq 'forget_password'}checked{/if}/><span>{lang key='push::push.forget_password'}</span>
-									</label>
-								</div>
-							</div>
-							
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="discover" {if $extradata.open_type eq 'discover'}checked{/if}/><span>{lang key='push::push.discover'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="qrcode" {if $extradata.open_type eq 'qrcode'}checked{/if}/><span>{lang key='push::push.qrcode'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="qrshare" {if $extradata.open_type eq 'qrshare'}checked{/if}/><span>{lang key='push::push.qrshare'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="history" {if $extradata.open_type eq 'history'}checked{/if}/><span>{lang key='push::push.history'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="feedback" {if $extradata.open_type eq 'feedback'}checked{/if}/><span>{lang key='push::push.feedback'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="map" {if $extradata.open_type eq 'map'}checked{/if}/><span>{lang key='push::push.map'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="message" {if $extradata.open_type eq 'message'}checked{/if}/><span>{lang key='push::push.message_center'}</span>
-									</label>
-								</div>
-							</div>
+						<!-- {/foreach} -->
 						
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="webview" {if $extradata.open_type eq 'webview'}checked{/if}/><span>{lang key='push::push.webview'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="setting" {if $extradata.open_type eq 'setting'}checked{/if}/><span>{lang key='push::push.setting'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="language" {if $extradata.open_type eq 'language'}checked{/if}/><span>{lang key='push::push.language'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="cart" {if $extradata.open_type eq 'cart'}checked{/if}/><span>{lang key='push::push.cart'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="search" {if $extradata.open_type eq 'search'}checked{/if}/><span>{lang key='push::push.search'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="help" {if $extradata.open_type eq 'help'}checked{/if}/><span>{lang key='push::push.help'}</span>
-									</label>
-								</div>
-							</div>
-							
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="goods_seller_list" {if $extradata.open_type eq 'goods_seller_list'}checked{/if}/><span>{lang key='push::push.goods_list'}</span>
-									</label>
-								</div>
-<!-- 								<div class="choose"> -->
-<!-- 									<label> -->
-<!-- 										<input type="radio" class="uni_style" name="action" value="goods_list" {if $extradata.open_type eq 'goods_list'}checked{/if}/><span>{lang key='push::push.goods_list'}</span> -->
-<!-- 									</label> -->
-<!-- 								</div> -->
-<!-- 								<div class="choose"> -->
-<!-- 									<label> -->
-<!-- 										<input type="radio" class="uni_style" name="action" value="goods_comment" {if $extradata.open_type eq 'goods_comment'}checked{/if}/><span>{lang key='push::push.goods_comment'}</span> -->
-<!-- 									</label> -->
-<!-- 								</div> -->
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="goods_detail" {if $extradata.open_type eq 'goods_detail'}checked{/if}/><span>{lang key='push::push.goods_detail'}</span>
-									</label>
-								</div>
-								
-								
-							</div>
-							
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="orders_list" {if $extradata.open_type eq 'orders_list'}checked{/if}/><span>{lang key='push::push.orders_list'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="orders_detail" {if $extradata.open_type eq 'orders_detail'}checked{/if}/><span>{lang key='push::push.orders_detail'}</span>
-									</label>
-								</div>
-							</div>
-							
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_center" {if $extradata.open_type eq 'user_center'}checked{/if}/><span>{lang key='push::push.user_center'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_wallet" {if $extradata.open_type eq 'user_wallet'}checked{/if}/><span>{lang key='push::push.user_wallet'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_address" {if $extradata.open_type eq 'user_address'}checked{/if}/><span>{lang key='push::push.user_address'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_account" {if $extradata.open_type eq 'user_account'}checked{/if}/><span>{lang key='push::push.user_account'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_collect" {if $extradata.open_type eq 'user_collect'}checked{/if}/><span>{lang key='push::push.user_collect'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="user_password" {if $extradata.open_type eq 'user_password'}checked{/if}/><span>{lang key='push::push.user_password'}</span>
-									</label>
-								</div>
-							</div>
-							
-							<div class="clear_both">
-<!-- 								<div class="choose"> -->
-<!-- 									<label> -->
-<!-- 										<input type="radio" class="uni_style" name="action" value="seller" {if $extradata.open_type eq 'seller'}checked{/if}/><span>{lang key='push::push.seller'}</span> -->
-<!-- 									</label> -->
-<!-- 								</div> -->
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="seller" {if $extradata.open_type eq 'seller_list'}checked{/if}/><span>{lang key='push::push.seller_list'}</span>
-									</label>
-								</div>
-							</div>
-							<div class="clear_both">
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="merchant" {if $extradata.open_type eq 'merchant'}checked{/if}/><span>{lang key='push::push.merchant'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="merchant_goods_list" {if $extradata.open_type eq 'merchant_goods_list'}checked{/if}/><span>{lang key='push::push.merchant_goods_list'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="merchant_suggest_list" {if $extradata.open_type eq 'merchant_suggest_list'}checked{/if}/><span>{lang key='push::push.merchant_suggest_list'}</span>
-									</label>
-								</div>
-								<div class="choose">
-									<label>
-										<input type="radio" class="uni_style" name="action" value="merchant_detail" {if $extradata.open_type eq 'merchant_detail'}checked{/if}/><span>{lang key='push::push.merchant_detail'}</span>
-									</label>
-								</div>
-							</div>
-						</div>
-					</div>
-					
-					<div id="urldiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_url'}</label>
-						<div class="controls">
-							<input type="text" id="url" name="url" value="{$push.url}"/>
-						</div>
-					</div>
-					<div id="keyworddiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_keywords'}</label>
-						<div class="controls">
-							<input type="text"  id="keyword" name="keyword" value="{$push.keyword}"/>
-						</div>
-					</div>
-					<div id="catdiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.lable_category_id'}</label>
-						<div class="controls">
-							<input type="text" id="category_id" name="category_id" value="{$push.category_id}"/>
-						</div>
-					</div>
-					<div id="goodsdiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_goods_id'}</label>
-						<div class="controls">
-							<input type="text" id="goods_id" name="goods_id" value="{$push.goods_id}"/>
-						</div>
-					</div>
-					<div id="ordersdiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_order_id'}</label>
-						<div class="controls">
-							<input type="text" id="order_id" name="order_id" value="{$push.order_id}"/>
-						</div>
-					</div>
-					<div id="sellerlist" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_seller_category'}</label>
-						<div class="controls">
-							<input type="text" id="seller_category" name="seller_category" value="{$push.seller_category}"/>
-						</div>
-					</div>
-					<div id="merchant" class="control-group hide">
-						<div class="control-group">
-							<label class="control-label">{lang key='push::push.label_merchant_id'}</label>
+						<h3 class="heading">推送行为</h3>
+						<div class="control-group open_action" >
+							<label class="control-label">打开动作：</label>
 							<div class="controls">
-								<input type="text" id="merchant_id" name="merchant_id" value="{$push.merchant_id}"/>
+								<select class="span6 object_html" id="object_value" name="object_value">
+			                        <option value='0'>请选择</option>
+			                        <!-- {html_options options=$action_list selected=$open_type} -->
+								</select>
+								<span class="help-block">选择该消息需要打开的页面，不选择时，默认打开主页</span>
 							</div>
 						</div>
-						<div class="control-group" id="merchant_category">
-							<label class="control-label">{lang key='push::push.lable_category_id'}</label>
+						
+						<div class="custom-div">
+							<!-- {foreach from=$args_list item=args} -->
+								<div class="control-group m_t10">
+				                	<label class="control-label">{$args.name}</label>
+				                	<div class="controls">
+					                	<input type="text" class="span6" name="{$args.code}" value="{$args.value}"/>
+					                	{if $args.description} 
+					                	<span class="help-block">{$args.description}</span>
+					                	{/if}
+					                </div>
+				                </div>
+							<!-- {/foreach} -->
+						</div>
+	
+						<h3 class="heading">推送对象</h3>
+						<div class="control-group" >
+							<label class="control-label">推送给：</label>
+							<div class="controls chk_radio">
+								<input type="radio" class="uni_style" name="target" value="0" {if $push.device_token eq 'broadcast'}checked="checked"{/if}/><span>所有设备</span>
+								<input type="radio" class="uni_style" name="target" value="1" {if $push.device_token neq 'broadcast'}checked="checked"{/if}/><span>单播</span>
+								<input type="radio" class="uni_style" name="target" value="user" /><span>用户</span>
+								<input type="radio" class="uni_style" name="target" value="merchant" /><span>商家用户</span>
+								<input type="radio" class="uni_style" name="target" value="admin" /><span>管理员</span>
+							</div>
+						</div>
+					
+						<div id="onediv" class="push_object control-group {if $push.device_token eq 'broadcast'}hide{/if}">
+							<label class="control-label">Device Token：</label>
 							<div class="controls">
-								<input type="text" id="goods_category_id" name="goods_category_id" value="{$push.goods_category_id}"/>
+								<input type="text" id="device_token" name="device_token" class="span8" value="{if $push.device_token neq 'broadcast'}{$push.device_token}{/if}"/>
 							</div>
 						</div>
-						<div class="control-group" id="merchant_suggest">
-							<label class="control-label">{lang key='push::push.label_suggest_type'}</label>
-							<div class="controls">
-								<input type="text" id="suggest_type" name="suggest_type" value="{$push.suggest_type}"/>
-								<span class="help-block">{lang key='push::push.suggest_type_help'}</span>
+						
+						
+						<div id="admindiv" class="push_object hide">
+							<div class="control-group">
+								<label class="control-label">管理员名称：</label>
+								<div class="controls">
+									<input type="text" name="admin_keywords" />
+									<button type="button" class="btn searchAadmin" data-url='{url path="push/admin/search_admin_list"}'>搜索</button>
+								</div>
 							</div>
-														
+							
+							<div class="control-group">
+								<label class="control-label">选择要推送的管理员：</label>
+								<div class="controls">
+									<select name="admin_id" class='admin_list'></select>
+									<span class="help-block">需要先搜索管理员，然后再选择。</span>
+								</div>
+							</div>
 						</div>
-					</div>
-					
-					<h3 class="heading">{lang key='push::push.push_object'}</h3>
-					<div class="control-group" >
-						<label class="control-label">{lang key='push::push.label_push_to'}</label>
-						<!-- {if $action eq 'add'} -->
-						<div class="controls chk_radio">
-							<input type="radio" class="uni_style" name="target" value="0" checked="checked"/><span>{lang key='push::push.all_people'}</span>
-							<input type="radio" class="uni_style" name="target" value="1" /><span>{lang key='push::push.unicast'}</span>
-							<input type="radio" class="uni_style" name="target" value="2" /><span>{lang key='push::push.user'}</span>
-							<input type="radio" class="uni_style" name="target" value="3" /><span>{lang key='push::push.administrator'}</span>
+						
+						<div id="userdiv" class="push_object hide">
+							<div class="control-group">
+								<label class="control-label">会员手机号：</label>
+								<div class="controls">
+									<input type="text" name="user_keywords" />
+									<button type="button" class="btn searchUser" data-url='{url path="push/admin/search_user_list"}'>搜索</button>
+								</div>
+							</div>
+							
+							<div class="control-group">
+								<label class="control-label">选择要推送的会员：</label>
+								<div class="controls">
+									<select name="user_id" class='user_list'></select>
+									<span class="help-block">需要先搜索会员，然后再选择。</span>
+								</div>
+							</div>
 						</div>
-						<!-- {else} -->
-						<div class="controls chk_radio">
-							<input type="radio" class="uni_style" name="target" value="0" {if $push.device_token eq 'broadcast'}checked{/if}/><span>{lang key='push::push.all_people'}</span>
-							<input type="radio" class="uni_style" name="target" value="1" {if $push.device_token neq 'broadcast'}checked{/if}/><span>{lang key='push::push.unicast'}</span>
-							<input type="radio" class="uni_style" name="target" value="2" /><span>{lang key='push::push.user'}</span>
-							<input type="radio" class="uni_style" name="target" value="3" /><span>{lang key='push::push.administrator'}</span>
+						
+						<div id="merdiv" class="push_object hide">
+							<div class="control-group">
+								<label class="control-label">商家会员手机号：</label>
+								<div class="controls">
+									<input type="text" name="mer_keywords" />
+									<button type="button" class="btn searchMer" data-url='{url path="push/admin/search_merchant_list"}'>搜索</button>
+								</div>
+							</div>
+							
+							<div class="control-group">
+								<label class="control-label">选择要推送的商家会员：</label>
+								<div class="controls">
+									<select name="merchant_user_id" class='merchant_user_list'></select>
+									<span class="help-block">需要先搜索商家会员，然后再选择。</span>
+								</div>
+							</div>
 						</div>
-						<!-- {/if} -->
-					</div>
-				
-					<div id="onediv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_device_token'}</label>
-						<div class="controls">
-							<input type="text" id="device_token" name="device_token" value="{if $push.device_token neq 'broadcast'}{$push.device_token}{/if}"/>
+						
+						<h3 class="heading">推送时机</h3>
+						<div class="control-group formSep">
+							<label class="control-label">{lang key='push::push.label_send_time'}</label>
+							<div class="controls chk_radio">
+								<input type="radio" name="priority" value="1" checked="checked" />{lang key='push::push.send_now'}&nbsp;&nbsp;
+								<input type="radio" name="priority" value="0" />{lang key='push::push.send_later'}
+							</div>
 						</div>
-					</div>
-					
-					<div id="userdiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_user_id'}</label>
-						<div class="controls">
-							<input type="text" id="user_id" name="user_id"/>
+					{else}
+						<div class="control-group open_action formSep" >
+							<label class="control-label">温馨提示：</label>
+							<div class="controls l_h30">
+								暂无产品进行推送，请前往顶部菜单 -> 工具 -> 移动应用 -> 客户端管理  进行配置信息即可。
+							</div>
 						</div>
-					</div>
-					
-					<div id="admindiv" class="control-group hide">
-						<label class="control-label">{lang key='push::push.label_admin_id'}</label>
-						<div class="controls">
-							<input type="text" id="admin_id" name="admin_id"/>
-						</div>
-					</div>
-					
-					<h3 class="heading">{lang key='push::push.push_time'}</h3>
-					<div class="control-group formSep">
-						<label class="control-label">{lang key='push::push.label_send_time'}</label>
-						<div class="controls chk_radio">
-							<input type="radio" name="priority" value="1" checked="checked" />{lang key='push::push.send_now'}&nbsp;&nbsp;
-							<input type="radio" name="priority" value="0" />{lang key='push::push.send_later'}
-						</div>
-					</div>
+					{/if}
 					
 					<div class="control-group">
 						<div class="controls m_t10">
-							<input type="hidden" name="appid" value="{$appid}"/>
+						    <input type="hidden" value="{url path='push/admin/ajax_admin_list'}" id="data-href-admin_list"/>
+							<input type="hidden" value="{url path='push/admin/ajax_event_select'}" id="data-href-delect"/>
+							<input type="hidden" value="{url path='push/admin/ajax_event_input'}" id="data-href-input"/>
 							<input class="btn btn-gebo" type="submit" value="{lang key='system::system.button_submit'}">&nbsp;&nbsp;&nbsp;
 						</div>
 					</div>

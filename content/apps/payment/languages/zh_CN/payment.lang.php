@@ -94,8 +94,8 @@ return array(
 	'payment_success'		=>	'付款成功',
 	'heading_order_info' 	=> '订单信息',
 	'fund_flow_record' 	=> '资金流水记录',
-	'transaction_flow_record'	=> '交易流水记录',
-	'view_flow_record'	=> '查看交易流水记录',
+	'transaction_flow_record'	=> '交易流水',
+	'view_flow_record'	=> '查看交易流水',
 	'order_id' 		=> '编号',
 	'order_sn' 		=> '商城订单编号',
 	'trade_type' 	=> '交易类型',
@@ -104,6 +104,7 @@ return array(
 	'pay_name' 		=> ' 支付名称',
 	'total_fee' 	=> '支付金额',
 	'create_time' 	=> '创建时间',
+	'pay_times' 	=> '付款时间',
 	'update_time' 	=> '修改更新时间',
 	'pay_time' 	=> '支付成功时间',
 	'pay_status' 	=> '交易状态',
@@ -115,6 +116,8 @@ return array(
 	'refund'		=>	'退款',
 	'deposit'		=>	'充值',
 	'withdraw'		=>	'提现',
+	'surplus'		=>	'会员充值',
+	'quickpay'		=>  '优惠买单',
 
 	'ctenpay' 		=> '立即注册财付通商户号',
 	'ctenpay_url' 	=> 'http://union.tenpay.com/mch/mch_register_b2c.shtml?sp_suggestuser=542554970',
@@ -158,6 +161,7 @@ return array(
 	
 	'payment_list_help'		=> '欢迎访问ECJia智能后台支付方式页面，系统中所有的支付方式都会显示在此列表中。',
 	'about_payment_list'	=> '关于支付方式帮助文档',
+	'change_status_ok'		=> '修复订单状态成功！'
 
 );
 

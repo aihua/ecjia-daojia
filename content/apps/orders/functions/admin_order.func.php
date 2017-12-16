@@ -138,9 +138,9 @@ function shipping_insure_fee($shipping_code, $goods_amount, $insure) {
 * @return  float
 */
 function pay_fee($payment_id, $order_amount, $cod_fee = null) {
-    $payment_method = RC_Loader::load_app_class('payment_method', 'payment');
+//     $payment_method = RC_Loader::load_app_class('payment_method', 'payment');
     $pay_fee = 0;
-    $payment = $payment_method->payment_info($payment_id);
+    $payment = with(new Ecjia\App\Payment\PaymentPlugin)->getPluginDataById($payment_id);
     $rate = $payment['is_cod'] && !is_null($cod_fee) ? $cod_fee : $payment['pay_fee'];
     if (strpos($rate, '%') !== false) {
         /* 支付费用是一个比例 */
@@ -519,8 +519,17 @@ function get_order_sn() {
 * @param   int	 $user_id	用户id
 * @return  array   用户信息
 */
-function user_info($user_id) {
-    $user = RC_DB::table('users')->where('user_id', $user_id)->first();
+function user_info($user_id, $mobile) {
+	if (!empty($user_id)) {
+		$user = RC_DB::table('users')->where('user_id', $user_id)->first();
+	} elseif (!empty($mobile)){
+		$user = RC_DB::table('users')->where('mobile_phone', $mobile)->first();
+	}
+   
+	if (empty($user)) {
+		return new ecjia_error('userinfo_error', '用户信息不存在！');
+	}
+	
     unset($user['question']);
     unset($user['answer']);
     /* 格式化帐户余额 */
@@ -655,33 +664,7 @@ function exist_real_goods($order_id = 0, $flow_type = CART_GENERAL_GOODS) {
     }
     return $query > 0;
 }
-/**
-* 查询配送区域属于哪个办事处管辖
-* @param   array   $regions	配送区域（1、2、3、4级按顺序）
-* @return  int	 办事处id，可能为0
-*/
-function get_agency_by_regions($regions) {
-    $db = RC_Loader::load_app_model('region_model', 'shipping');
-    if (!is_array($regions) || empty($regions)) {
-        return 0;
-    }
-    $arr = array();
-    $data = $db->field('region_id, agency_id')->where(array('region_id' => array('gt' => 0), 'agency_id' => array('gt' => 0)))->in(array('region_id' => $regions))->select();
-    if (!empty($data)) {
-        foreach ($data as $row) {
-            $arr[$row['region_id']] = $row['agency_id'];
-        }
-    }
-    if (empty($arr)) {
-        return 0;
-    }
-    $agency_id = 0;
-    for ($i = count($regions) - 1; $i >= 0; $i--) {
-        if (isset($arr[$regions[$i]])) {
-            return $arr[$regions[$i]];
-        }
-    }
-}
+
 /**
 * 改变订单中商品库存
 * @param   int	 $order_id   订单号
@@ -747,7 +730,7 @@ function change_goods_storage($goods_id, $product_id, $number = 0) {
     if (!empty($product_id)) {
         /* by will.chen start*/
         $product_number = RC_DB::table('products')->where('goods_id', $goods_id)->where('product_id', $product_id)->pluck('product_number');
-        if ($product_number < $number) {
+        if ($product_number < abs($number)) {
             return new ecjia_error('low_stocks', RC_Lang::get('orders::order.goods_num_err'));
         }
         /* end*/
@@ -755,7 +738,7 @@ function change_goods_storage($goods_id, $product_id, $number = 0) {
     }
     /* by will.chen start*/
     $goods_number = RC_DB::table('goods')->where('goods_id', $goods_id)->pluck('goods_number');
-    if ($goods_number < $number) {
+    if ($goods_number < abs($number)) {
         return new ecjia_error('low_stocks', RC_Lang::get('orders::order.goods_num_err'));
     }
     /* end*/
@@ -935,9 +918,21 @@ function get_goods_attr_info($arr, $type = 'pice', $warehouse_id = 0, $area_id =
     $attr = '';
     if (!empty($arr)) {
         $fmt = "%s:%s[%s] \n";
-        $field = "ga.goods_attr_id, a.attr_name, ga.attr_value, " . " IF(g.model_attr < 1, ga.attr_price, IF(g.model_attr < 2, wap.attr_price, wa.attr_price)) as attr_price ";
-        $dbview->view = array('attribute' => array('type' => Component_Model_View::TYPE_LEFT_JOIN, 'alias' => 'a', 'on' => 'a.attr_id = ga.attr_id'), 'goods' => array('type' => Component_Model_View::TYPE_LEFT_JOIN, 'alias' => 'g', 'on' => "g.goods_id = ga.goods_id"), 'warehouse_attr' => array('type' => Component_Model_View::TYPE_LEFT_JOIN, 'alias' => 'wap', 'on' => "ga.goods_id = wap.goods_id and wap.warehouse_id = '{$warehouse_id}' and ga.goods_attr_id = wap.goods_attr_id"), 'warehouse_area_attr' => array('type' => Component_Model_View::TYPE_LEFT_JOIN, 'alias' => 'wa', 'on' => "ga.goods_id = wa.goods_id and wa.area_id = '{$area_id}' and ga.goods_attr_id = wa.goods_attr_id"));
-        $data = $dbview->field($field)->join(array('attribute', 'goods', 'warehouse_attr', 'warehouse_area_attr'))->in(array('ga.goods_attr_id' => $arr))->select();
+        $field = "ga.goods_attr_id, a.attr_name, ga.attr_value, " .
+         " ga.attr_price as attr_price ";
+        $dbview->view = array(
+            'attribute' => array(
+                'type' => Component_Model_View::TYPE_LEFT_JOIN,
+                'alias' => 'a',
+                'on' => 'a.attr_id = ga.attr_id'
+            ),
+            'goods' => array(
+                'type' => Component_Model_View::TYPE_LEFT_JOIN,
+                'alias' => 'g',
+                'on' => "g.goods_id = ga.goods_id"
+            ),
+        );
+        $data = $dbview->field($field)->join(array('attribute', 'goods'))->in(array('ga.goods_attr_id' => $arr))->select();
         if (!empty($data)) {
             foreach ($data as $row) {
                 $attr_price = round(floatval($row['attr_price']), 2);
@@ -975,21 +970,20 @@ function get_consignee($user_id) {
 * @return  bool	true 完整 false 不完整
 */
 function check_consignee_info($consignee, $flow_type) {
-    $db = RC_Loader::load_app_model('region_model', 'shipping');
     if (exist_real_goods(0, $flow_type)) {
         /* 如果存在实体商品 */
         $res = !empty($consignee['consignee']) && !empty($consignee['country']) && (!empty($consignee['tel']) || !empty($consignee['mobile']));
         if ($res) {
             if (empty($consignee['province'])) {
                 /* 没有设置省份，检查当前国家下面有没有设置省份 */
-                $pro = $db->get_regions(1, $consignee['country']);
+                $pro = ecjia_region::getSubarea($consignee['country']);
                 $res = empty($pro);
             } elseif (empty($consignee['city'])) {
                 /* 没有设置城市，检查当前省下面有没有城市 */
-                $city = $db->get_regions(2, $consignee['province']);
+                $city = ecjia_region::getSubarea($consignee['province']);
                 $res = empty($city);
             } elseif (empty($consignee['district'])) {
-                $dist = $db->get_regions(3, $consignee['city']);
+                $dist = ecjia_region::getSubarea($consignee['city']);
                 $res = empty($dist);
             }
         }
@@ -1220,7 +1214,7 @@ function EM_order_goods($order_id, $page = 1, $pagesize = 10) {
         ->groupBy(RC_DB::raw('og.rec_id'))
         ->take($pagesize)->skip(($page-1)*$pagesize)
 		->get();
-
+    $goods_list = array();
     if (!empty($res)) {
         RC_Loader::load_app_func('global', 'goods');
         foreach ($res as $row) {
@@ -1289,11 +1283,12 @@ function operable_list($order) {
 		$priv_list = array('os' => strpos($actions, ',order_os_edit,') !== false, 'ss' => strpos($actions, ',order_ss_edit,') !== false, 'ps' => strpos($actions, ',order_ps_edit,') !== false, 'edit' => strpos($actions, ',order_edit,') !== false);
 	}
 	/* 取得订单支付方式是否货到付款 */
-	$payment_method = RC_Loader::load_app_class('payment_method', 'payment');
-	$payment = array();
-	if (!empty($payment_method)) {
-		$payment = $payment_method->payment_info($order['pay_id']);
-	}
+// 	$payment_method = RC_Loader::load_app_class('payment_method', 'payment');
+// 	$payment = array();
+// 	if (!empty($payment_method)) {
+		
+// 	}
+	$payment = with(new Ecjia\App\Payment\PaymentPlugin)->getPluginDataById($order['pay_id']);
 	$is_cod = $payment['is_cod'] == 1;
 	/* 根据状态返回可执行操作 */
 	$list = array();
@@ -1516,7 +1511,7 @@ function get_back_list() {
 	//实例化分页
 	$page = new ecjia_page($count, 15, 6);
 	/* 查询 */
-	$row = $db_back_order->select('back_id', 'order_id', 'delivery_sn', 'order_sn', 'order_id', 'add_time', 'action_user', 'consignee', 'country', 'province', 'city', 'district', 'tel', 'status', 'update_time', 'email', 'return_time')->orderby($filter['sort_by'], $filter['sort_order'])->take(15)->skip($page->start_id - 1)->get();
+	$row = $db_back_order->select('back_id', 'order_id', 'delivery_sn', 'order_sn', 'order_id', 'add_time', 'action_user', 'consignee', 'country', 'province', 'city', 'district', 'street', 'tel', 'status', 'update_time', 'email', 'return_time')->orderby($filter['sort_by'], $filter['sort_order'])->take(15)->skip($page->start_id - 1)->get();
 	if (!empty($row) && is_array($row)) {
 		/* 格式化数据 */
 		foreach ($row as $key => $value) {

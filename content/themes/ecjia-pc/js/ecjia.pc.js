@@ -231,12 +231,10 @@
 					expires: 7
 				});
 				
-				var location_id = $('.location-position').attr('data-id');
-				var location_name = $('.location-position').text();
-				$.cookie('location_id', location_id, {
+				$.cookie('location_id', city_id, {
 					expires: 7
 				});
-				$.cookie('location_name', location_name, {
+				$.cookie('location_address', city_name, {
 					expires: 7
 				});
 
@@ -257,11 +255,11 @@
 				}
 			});
 
-			$('input[name="keywords"]').on('blur', function() {
+			$('input[name="keywords"]').off('blur').on('blur', function() {
 				$('.shelper').fadeOut('fast');
 			});
 
-			$('input[name="keywords"]').on('focus', function() {
+			$('input[name="keywords"]').off('focus').on('focus', function() {
 				var $this = $(this),
 					url = $this.parent('.search').attr('data-url'),
 					goods_url = $('.search-button').attr('data-url'),
@@ -438,7 +436,7 @@
 				index = sessionStorage.getItem("index");
 			}
 			var swiper = new Swiper('#category-swiper-web', {
-				slidesPerView: 9,
+				slidesPerView: 8,
 				paginationClickable: true,
 				initialSlide: index,
 				spaceBetween: 0,
